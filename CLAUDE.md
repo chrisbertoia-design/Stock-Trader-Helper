@@ -133,7 +133,14 @@ Structured logger in `src/services/logger.js`. Levels: DEBUG, INFO, WARN, ERROR.
 
 ## Working Style
 - ALWAYS use `cd ~/Stock-Trader-Helper` in terminal blocks (not full /home/user paths)
-- ALWAYS kill the dev port before starting the server: `fuser -k 5175/tcp 2>/dev/null || true && npm run dev`
+- ALWAYS include git pull before starting the server
+- ALWAYS kill the dev port before npm run dev
+- Standard restart block (use this exact sequence every time):
+  ```bash
+  cd ~/Stock-Trader-Helper
+  git pull origin claude/web-app-google-sheets-wt63b
+  fuser -k 5175/tcp 2>/dev/null || true && npm run dev
+  ```
 - Every URL must be clickable
 - On errors: log to `bad.md`, try one fix, surface to user with context if it fails
 - `CLAUDE.md` updates triggered by user-confirmed success ("that works", "ship it"), not every commit

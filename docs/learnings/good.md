@@ -22,6 +22,16 @@ Single `values:batchUpdate` call for all config writes via `writeConfigBatch()`.
 to check existing headers before writing. Avoids 429 rate limits from sequential per-cell API calls.
 **Reuse**: any multi-key Sheets write — always batch.
 
+## 2026-03-14 | Standard terminal restart sequence — always use this exact block
+```bash
+cd ~/Stock-Trader-Helper
+git pull origin claude/web-app-google-sheets-wt63b
+fuser -k 5175/tcp 2>/dev/null || true && npm run dev
+```
+Three steps, always in this order: cd → pull → kill port → run.
+Missing any step causes stale code, port conflicts, or both.
+**Reuse**: every single time the user is asked to restart the dev server.
+
 ## 2026-03-14 | Always kill port 5175 before starting dev server
 Include `fuser -k 5175/tcp 2>/dev/null || true` before `npm run dev` in every terminal block.
 Prevents "port already in use" errors when the user closes a terminal without stopping the server.
