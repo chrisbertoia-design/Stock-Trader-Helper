@@ -21,8 +21,7 @@ export async function loadConfig() {
 }
 
 export function getConfig() {
-  if (!_loaded) throw new Error('Config not loaded yet — call loadConfig() first')
-  return _config
+  return _config   // returns {} before Sheets loads — callers use fallback defaults
 }
 
 export function get(key, fallback = '') {
