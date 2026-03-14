@@ -11,8 +11,9 @@ import { debug, info, warn }         from '../services/logger.js'
 const CAT = 'POSITIONS_STORE'
 
 // Canonical shape: { [ticker]: { ticker, quantity, avg_cost, mkt_value, gain_loss, gain_loss_pct, last_csv_upload, source } }
-let _positions = null
-let _loaded    = false
+let _positions   = null
+let _loaded      = false
+let _loadInFlight = null  // dedup: concurrent callers share one Sheets request
 
 // ─── Normalize MOCK_POSITIONS to the store's canonical shape ─────────────────
 // MOCK_POSITIONS uses: qty, price, mkt_val, cost_basis, gl_pct
@@ -43,10 +44,25 @@ function _normalizeMock() {
 /**
  * Load positions from Sheets my_positions tab.
  * Falls back to MOCK_POSITIONS if Sheets not ready or tab is empty.
- * Safe to call multiple times — re-reads on each call.
+ * Concurrent callers share a single in-flight request — no double-fetching.
  */
-export async function loadPositions() {
-  debug(CAT, 'loadPositions()')
+export function loadPositions() {
+  // If already loaded and not stale, return immediately
+  if (_loaded && _positions !== null) {
+    debug(CAT, 'loadPositions() — already loaded, returning cached')
+    return Promise.resolve(_positions)
+  }
+  // Dedup: join an in-flight request rather than firing a second Sheets call
+  if (_loadInFlight) {
+    debug(CAT, 'loadPositions() — joining in-flight request')
+    return _loadInFlight
+  }
+  _loadInFlight = _doLoadPositions().finally(() => { _loadInFlight = null })
+  return _loadInFlight
+}
+
+async function _doLoadPositions() {
+  debug(CAT, '_doLoadPositions()')
 
   if (!getSpreadsheetId()) {
     warn(CAT, 'No spreadsheetId — using MOCK_POSITIONS')
