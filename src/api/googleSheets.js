@@ -197,9 +197,11 @@ export async function readTab(tabName, range = null) {
 export async function appendRows(tabName, rows) {
   if (!rows.length) return
   debug(CAT, `appendRows to ${tabName}`, { count: rows.length })
-  await _apiPost(
-    `values/${encodeURIComponent(tabName + '!A1')}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`,
-    { values: rows }
+  await _withRetry(() =>
+    _apiPost(
+      `values/${encodeURIComponent(tabName + '!A1')}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`,
+      { values: rows }
+    )
   )
 }
 
@@ -229,37 +231,41 @@ async function _ensureAllTabs() {
   const needed   = Object.keys(SCHEMA)
   const missing  = needed.filter(t => !existing.includes(t))
 
-  if (missing.length === 0) {
-    debug(CAT, 'All tabs present')
-    return
+  // Create any missing tabs first
+  if (missing.length > 0) {
+    info(CAT, `Creating missing tabs: ${missing.join(', ')}`)
+    const requests = missing.map(tab => ({
+      addSheet: { properties: { title: tab } }
+    }))
+    await _apiBatchUpdate({ requests })
   }
 
-  info(CAT, `Creating missing tabs: ${missing.join(', ')}`)
-  const requests = missing.map(tab => ({
-    addSheet: { properties: { title: tab } }
-  }))
-  await _apiBatchUpdate({ requests })
+  // Write ALL headers in one batched API call (avoids per-tab 429 bursts).
+  // Uses values.batchUpdate — single write regardless of tab count.
+  // Safe to re-run: always writes to row 1 which is idempotent.
+  const data = needed
+    .filter(tab => SCHEMA[tab])
+    .map(tab => ({
+      range:          `${tab}!A1`,
+      majorDimension: 'ROWS',
+      values:         [SCHEMA[tab]]
+    }))
 
-  // Write headers
-  for (const tab of missing) {
-    await _writeHeader(tab)
+  if (data.length > 0) {
+    debug(CAT, `Writing headers for ${data.length} tabs in single batch call`)
+    await _withRetry(() =>
+      _apiPost(
+        `values:batchUpdate`,
+        { valueInputOption: 'USER_ENTERED', data }
+      )
+    )
+    info(CAT, 'All tab headers written')
   }
-  info(CAT, `Created ${missing.length} tabs with headers`)
 }
 
 async function _getExistingTabs() {
   const res = await _apiGetMeta()
   return (res.sheets ?? []).map(s => s.properties.title)
-}
-
-async function _writeHeader(tabName) {
-  const headers = SCHEMA[tabName]
-  if (!headers) return
-  await _apiPut(
-    `values/${encodeURIComponent(tabName + '!A1')}?valueInputOption=USER_ENTERED`,
-    { values: [headers] }
-  )
-  debug(CAT, `Header written for tab: ${tabName}`)
 }
 
 async function _ensureDefaultConfig() {
@@ -336,6 +342,22 @@ async function _apiPut(path, body) {
     throw new Error(`Sheets PUT ${path}: ${res.status} ${b}`)
   }
   return res.json()
+}
+
+/** Retry wrapper for 429 rate-limit errors — exponential backoff */
+async function _withRetry(fn, maxAttempts = 5) {
+  let delay = 2000
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      return await fn()
+    } catch (e) {
+      const is429 = e.message?.includes('429') || e.message?.includes('RATE_LIMIT')
+      if (!is429 || attempt === maxAttempts) throw e
+      warn(CAT, `429 rate limit — retry ${attempt}/${maxAttempts} in ${delay}ms`)
+      await new Promise(r => setTimeout(r, delay))
+      delay = Math.min(delay * 2, 30000)
+    }
+  }
 }
 
 async function _apiBatchUpdate(body) {
