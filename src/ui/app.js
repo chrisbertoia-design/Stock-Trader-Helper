@@ -40,9 +40,12 @@ export function renderApp({ spreadsheetId }) {
   const backBtn     = document.getElementById('back-btn')
   const settingsBtn = document.getElementById('settings-btn')
   let   activeView  = null
+  let   _navigating = false
 
   async function navigate(viewName, params = {}) {
+    if (_navigating) return                                       // drop clicks while a navigation is in progress
     if (viewName === activeView && viewContent.children.length > 0) return
+    _navigating = true
     activeView = viewName
 
     info(CAT, `Navigate to: ${viewName}`)
@@ -81,6 +84,8 @@ export function renderApp({ spreadsheetId }) {
           <div class="empty-state-title">Something went wrong</div>
           <div class="empty-state-sub">${e.message}</div>
         </div>`
+    } finally {
+      _navigating = false
     }
   }
 

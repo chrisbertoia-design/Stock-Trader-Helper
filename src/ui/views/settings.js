@@ -1,28 +1,45 @@
 /**
- * Settings view — reads/writes the Google Sheets config tab.
- * Groups settings into sections. All values editable in-app.
+ * Settings view — mock-only for Phase 1.
+ * Shows a static settings form with no live data or saves.
+ * No API or store imports.
  */
 
-import { getConfig, saveEditableConfig } from '../../stores/config.js'
-import { info }                          from '../../services/logger.js'
-import { showToast }                     from '../components/toast.js'
+import { showToast } from '../components/toast.js'
 
 const CAT = 'SETTINGS_VIEW'
+
+const MOCK_CONFIG = {
+  consensus_tier1_pct:   '0.05',
+  consensus_tier2_pct:   '0.10',
+  consensus_tier3_pct:   '0.25',
+  consensus_window_days: '14',
+  ai_provider:           'gemini',
+  ai_model:              '',
+  ollama_base_url:       'http://localhost:11434',
+  ollama_fallback_model: 'llama3.2',
+  gemini_api_key:        '',
+  gemini_fallback_model: 'gemini-2.0-flash',
+  ntfy_topic:            '',
+  ntfy_base_url:         'https://ntfy.sh',
+  notify_on_tier:        '2',
+  log_level:             'INFO',
+  log_max_rows:          '500',
+}
 
 const SECTIONS = [
   {
     title: 'Consensus Thresholds',
-    note: 'Fraction of a party (0–1) that must trade the same ticker within the window to trigger a signal. Research-backed defaults — adjust if too noisy.',
+    note: 'Fraction of a party (0\u20131) that must trade the same ticker within the window to trigger a signal. Research-backed defaults \u2014 adjust if too noisy.',
     fields: [
-      { key: 'consensus_tier1_pct',   label: 'Tier 1 — Elevated',        type: 'number', step: '0.01', min: '0.01', max: '1' },
-      { key: 'consensus_tier2_pct',   label: 'Tier 2 — Strong',          type: 'number', step: '0.01', min: '0.01', max: '1' },
-      { key: 'consensus_tier3_pct',   label: 'Tier 3 — Near-Unanimous',  type: 'number', step: '0.01', min: '0.01', max: '1' },
+      { key: 'consensus_tier1_pct',   label: 'Tier 1 \u2014 Elevated',        type: 'number', step: '0.01', min: '0.01', max: '1' },
+      { key: 'consensus_tier2_pct',   label: 'Tier 2 \u2014 Strong',          type: 'number', step: '0.01', min: '0.01', max: '1' },
+      { key: 'consensus_tier3_pct',   label: 'Tier 3 \u2014 Near-Unanimous',  type: 'number', step: '0.01', min: '0.01', max: '1' },
       { key: 'consensus_window_days', label: 'Window (days)',             type: 'number', step: '1',    min: '7',    max: '90' },
     ]
   },
   {
     title: 'AI Provider',
-    note: 'Ollama runs locally (laptop only). Gemini works on all devices. Model field is optional — leave blank to use provider default.',
+    note: 'Ollama runs locally (laptop only). Gemini works on all devices. Model field is optional \u2014 leave blank to use provider default.',
     fields: [
       { key: 'ai_provider',           label: 'Provider',            type: 'select', options: ['ollama', 'gemini'] },
       { key: 'ai_model',              label: 'Model Override',       type: 'text',   placeholder: 'blank = use provider default' },
@@ -43,7 +60,7 @@ const SECTIONS = [
   },
   {
     title: 'Debug & Logging',
-    note: 'Logs are written to the "log" tab in your Google Sheet. DEBUG is verbose — switch to INFO for quieter operation.',
+    note: 'Logs are written to the "log" tab in your Google Sheet. DEBUG is verbose \u2014 switch to INFO for quieter operation.',
     fields: [
       { key: 'log_level',    label: 'Log Level',    type: 'select', options: ['DEBUG', 'INFO', 'WARN', 'ERROR'] },
       { key: 'log_max_rows', label: 'Max Log Rows', type: 'number', step: '100', min: '100' },
@@ -52,9 +69,7 @@ const SECTIONS = [
 ]
 
 export async function renderSettings(container) {
-  info(CAT, 'renderSettings()')
-  const config = getConfig()
-  const edits  = { ...config }
+  const config = { ...MOCK_CONFIG }
 
   container.innerHTML = `
     <div style="max-width: 560px;">
@@ -69,30 +84,16 @@ export async function renderSettings(container) {
           Settings are stored in the <span style="font-family:var(--font-mono)">config</span> tab of your Google Sheet.
           You can also edit them directly in Sheets.
         </div>
+        <div style="font-size:11px; color:var(--accent); margin-top:4px;">
+          Live settings sync available in Phase 2
+        </div>
       </div>
     </div>
   `
 
-  // Track changes
-  container.addEventListener('change', (e) => {
-    const key = e.target.dataset.key
-    if (key) edits[key] = e.target.value
-  })
-
-  document.getElementById('save-settings').addEventListener('click', async () => {
-    const btn = document.getElementById('save-settings')
-    btn.textContent = 'Saving...'
-    btn.disabled = true
-    try {
-      await saveEditableConfig(edits)
-      showToast('Settings saved to Google Sheets')
-      info(CAT, 'Settings saved')
-    } catch (e) {
-      showToast(`Save failed: ${e.message}`)
-    } finally {
-      btn.textContent = 'Save to Sheets'
-      btn.disabled = false
-    }
+  // Save button — show Phase 2 toast
+  document.getElementById('save-settings').addEventListener('click', () => {
+    showToast('Settings save available in Phase 2')
   })
 }
 
