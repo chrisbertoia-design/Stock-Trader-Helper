@@ -144,9 +144,21 @@ export async function initSheets(spreadsheetId, accessToken) {
   _spreadsheetId = spreadsheetId
   _accessToken   = accessToken
 
-  await _ensureAllTabs()
-  await _ensureDefaultConfig()
-  info(CAT, 'Google Sheets initialized successfully', { spreadsheetId })
+  // Tab provisioning is maintenance-only — non-fatal.
+  // If quota is exhausted (429) or network is slow, the app still loads.
+  // Tabs are already created after first boot; we just skip header re-writes.
+  try {
+    await _ensureAllTabs()
+  } catch (e) {
+    warn(CAT, `_ensureAllTabs failed (non-fatal): ${e.message}`)
+  }
+  try {
+    await _ensureDefaultConfig()
+  } catch (e) {
+    warn(CAT, `_ensureDefaultConfig failed (non-fatal): ${e.message}`)
+  }
+
+  info(CAT, 'Google Sheets initialized', { spreadsheetId })
 }
 
 export function getSpreadsheetId() { return _spreadsheetId }
@@ -246,7 +258,8 @@ async function _ensureAllTabs() {
   const ranges     = schemaTabs.map(tab => `${tab}!A1`)
   debug(CAT, `batchGet to check existing headers for ${schemaTabs.length} tabs`)
   const batchRes   = await _withRetry(() =>
-    _apiGet(`values:batchGet?${ranges.map(r => `ranges=${encodeURIComponent(r)}`).join('&')}`)
+    _apiGet(`values:batchGet?${ranges.map(r => `ranges=${encodeURIComponent(r)}`).join('&')}`),
+    2  // max 2 attempts on startup — fail fast, non-fatal caller handles it
   )
   const valueRanges = batchRes.valueRanges ?? []
 
@@ -268,7 +281,8 @@ async function _ensureAllTabs() {
       _apiPost(
         `values:batchUpdate`,
         { valueInputOption: 'USER_ENTERED', data }
-      )
+      ),
+      2  // max 2 attempts on startup
     )
     info(CAT, 'Tab headers written')
   } else {
