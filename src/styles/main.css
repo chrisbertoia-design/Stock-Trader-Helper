@@ -13,9 +13,9 @@
   --border-hard:   rgba(255,255,255,0.18);
 
   /* Text */
-  --text-primary:  #f0f0f0;
-  --text-secondary:#8a8a8a;
-  --text-tertiary: #555555;
+  --text-primary:  #ffffff;
+  --text-secondary: #a0a0a0;
+  --text-tertiary:  #606060;
   --text-inverse:  #0d0d0d;
 
   /* Accent — single, restrained */
@@ -118,14 +118,15 @@ body {
   align-items: center;
   justify-content: space-between;
   padding: var(--s4) var(--s5);
+  min-height: 56px;
   border-bottom: 1px solid var(--border-subtle);
   flex-shrink: 0;
 }
 
 .app-wordmark {
-  font-size: 13px;
-  font-weight: 600;
-  letter-spacing: 0.12em;
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
   color: var(--accent);
 }
 
@@ -414,11 +415,11 @@ body {
   display: flex;
   align-items: center;
   gap: var(--s2);
-  font-size: 12px;
-  font-weight: 500;
+  font-size: 13px;
+  font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: var(--text-tertiary);
+  color: var(--text-secondary);
 }
 
 .home-card-value {
@@ -530,36 +531,34 @@ body {
 }
 
 .back-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: var(--s2) var(--s2);
-  border: none;
+  font-size: 20px;
+  padding: var(--s2) var(--s3);
   background: transparent;
+  border: none;
   color: var(--text-secondary);
-  font-size: 18px;
-  line-height: 1;
   cursor: pointer;
   border-radius: var(--r2);
-  transition: color var(--fast) var(--ease), background var(--fast) var(--ease);
-  font-family: var(--font-sans);
+  transition: color var(--fast) var(--ease);
+  line-height: 1;
 }
-
-.back-btn:hover {
-  color: var(--text-primary);
-  background: var(--bg-elevated);
-}
+.back-btn:hover { color: var(--text-primary); }
 
 .back-btn:active {
   background: var(--bg-overlay);
 }
 
 .settings-btn {
-  padding: var(--s2) var(--s2);
-  font-size: 16px;
+  font-size: 20px;
+  padding: var(--s2);
   line-height: 1;
-  border-color: transparent;
+  color: var(--text-secondary);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  border-radius: var(--r2);
+  transition: color var(--fast) var(--ease);
 }
+.settings-btn:hover { color: var(--text-primary); }
 
 .drill-header {
   display: flex;
@@ -577,8 +576,8 @@ body {
 
 /* Sync dot — keep existing styles intact, just ensure it fits the new header */
 .sync-dot {
-  width: 7px;
-  height: 7px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
   background: var(--text-tertiary);
   flex-shrink: 0;

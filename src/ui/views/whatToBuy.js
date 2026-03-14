@@ -5,9 +5,9 @@
  */
 
 const MOCK_PICKS = [
-  { ticker: 'NVDA', pct: 0.40, rationale: 'Pelosi + 14% of Congress buying. AI chip tailwind.', followed: true,  owned: 0 },
-  { ticker: 'MSFT', pct: 0.35, rationale: 'Crenshaw bought recently. Strong enterprise AI demand.', followed: false, owned: 0 },
-  { ticker: 'AAPL', pct: 0.25, rationale: 'Bipartisan buying pattern. You own $4,200 — small add.', followed: false, owned: 4200 },
+  { ticker: 'NVDA', pct: 0.40, rationale: 'Pelosi + 14% of Congress buying. AI chip tailwind.', followed: true,  owned: 2800,  alignment: 'aligned'  },
+  { ticker: 'MSFT', pct: 0.35, rationale: 'Crenshaw bought recently. Strong enterprise AI demand.', followed: false, owned: 0,     alignment: 'gap'      },
+  { ticker: 'AAPL', pct: 0.25, rationale: 'Bipartisan buying pattern. Modest add recommended.', followed: false, owned: 4200,  alignment: 'aligned'  },
 ]
 
 const QUICK_AMOUNTS = [100, 250, 500, 1000]
@@ -178,8 +178,11 @@ function _renderStep2(totalAmount) {
 
         <div style="margin-bottom:var(--s5);">
           <h2 style="font-size:15px; font-weight:500; margin-bottom:var(--s1); color:var(--text-primary);">Recommended Slices</h2>
-          <div style="font-size:12px; color:var(--text-tertiary); margin-bottom:var(--s4);">
+          <div style="font-size:12px; color:var(--text-tertiary); margin-bottom:var(--s2);">
             ${picks.length} picks · based on recent signals
+          </div>
+          <div style="font-size:11px; color:var(--text-secondary); margin-bottom:var(--s4);">
+            Portfolio match: ${_alignmentSummary(picks)}
           </div>
         </div>
 
@@ -272,10 +275,32 @@ function _renderPickCard(pick) {
               You own $${pick.owned.toLocaleString()} — small add.
             </div>
           ` : ''}
+          ${_alignmentBadge(pick.alignment)}
         </div>
       </div>
     </div>
   `
+}
+
+function _alignmentBadge(alignment) {
+  const map = {
+    aligned:  { icon: '✅', label: 'Aligned with your portfolio',  color: 'var(--buy)'  },
+    gap:      { icon: '🔵', label: 'You don\'t own this yet — gap opportunity', color: 'var(--accent)' },
+    diverged: { icon: '⚠️', label: 'Signal conflicts with your holdings', color: 'var(--sell)' },
+  }
+  const { icon, label, color } = map[alignment] || map.gap
+  return `<div style="margin-top:8px; font-size:11px; color:${color}; font-weight:500;">${icon} ${label}</div>`
+}
+
+function _alignmentSummary(picks) {
+  const aligned  = picks.filter(p => p.alignment === 'aligned').length
+  const gaps     = picks.filter(p => p.alignment === 'gap').length
+  const diverged = picks.filter(p => p.alignment === 'diverged').length
+  const parts = []
+  if (aligned)  parts.push(`<span style="color:var(--buy)">${aligned} aligned</span>`)
+  if (gaps)     parts.push(`<span style="color:var(--accent)">${gaps} gap${gaps>1?'s':''}</span>`)
+  if (diverged) parts.push(`<span style="color:var(--sell)">${diverged} conflict${diverged>1?'s':''}</span>`)
+  return parts.join(' · ')
 }
 
 function _showError(inputElement, message) {
