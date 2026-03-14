@@ -36,7 +36,7 @@ export function renderApp({ spreadsheetId }) {
   // Navigation
   const navBtns   = document.querySelectorAll('.nav-btn')
   const viewContent = document.getElementById('view-content')
-  let   activeView = 'feed'
+  let   activeView = null   // null so first switchView('feed') is never skipped
 
   async function switchView(view) {
     if (view === activeView && viewContent.children.length > 0) return

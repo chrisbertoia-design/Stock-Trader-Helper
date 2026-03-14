@@ -6,7 +6,7 @@
 
 import { parseTransactionsCsv, derivePositions, parsePositionsCsv }
   from '../../services/schwabParser.js'
-import { readTab, appendRows }    from '../../api/googleSheets.js'
+import { readTab, appendRows, getSpreadsheetId } from '../../api/googleSheets.js'
 import { info, warn }             from '../../services/logger.js'
 import { showToast }              from '../components/toast.js'
 import { MOCK_POSITIONS, MOCK_LAST_UPDATE, MOCK_ACCOUNT, ACCOUNT_SUMMARY } from '../../data/mockPositions.js'
@@ -23,6 +23,7 @@ export async function renderPositions(container) {
   let fromSheets = false
 
   try {
+    if (!getSpreadsheetId()) throw new Error('Sheets not ready')
     const rows = await readTab('my_positions')
     if (rows.length > 0) {
       fromSheets = true
