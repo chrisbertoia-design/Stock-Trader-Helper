@@ -27,8 +27,16 @@ const CAT = 'AI_ROUTER'
  * @returns {Promise<string>}
  */
 export async function ask(prompt, { system = '', config, context = {} } = {}) {
-  const provider = config.ai_provider || 'ollama'
-  const model    = config.ai_model || ''
+  // Merge env vars as lowest-priority fallback (useful before Sheets is connected)
+  const envConfig = {
+    ai_provider:           import.meta.env.VITE_AI_PROVIDER || '',
+    gemini_api_key:        import.meta.env.VITE_GEMINI_API_KEY || '',
+    gemini_fallback_model: import.meta.env.VITE_GEMINI_MODEL || '',
+  }
+  const merged   = { ...envConfig, ...(config || {}) }
+
+  const provider = merged.ai_provider || 'ollama'
+  const model    = merged.ai_model || ''
 
   debug(CAT, `ask() — provider=${provider} model=${model || '(default)'}`)
 
@@ -36,14 +44,14 @@ export async function ask(prompt, { system = '', config, context = {} } = {}) {
   const fallbackCall = provider === 'gemini' ? callOllama  : callGemini
 
   try {
-    const result = await primaryCall(prompt, { system, model, config })
+    const result = await primaryCall(prompt, { system, model, config: merged })
     info(CAT, `AI response from ${provider} (${result.model || 'unknown model'})`)
     debug(CAT, 'AI prompt+response', { prompt: prompt.slice(0, 200), response: result.text.slice(0, 300) })
     return result.text
   } catch (err) {
     warn(CAT, `Primary provider (${provider}) failed — trying fallback`, err.message)
     try {
-      const result = await fallbackCall(prompt, { system, model: '', config })
+      const result = await fallbackCall(prompt, { system, model: '', config: merged })
       info(CAT, `AI fallback response from ${provider === 'gemini' ? 'ollama' : 'gemini'}`)
       return result.text
     } catch (err2) {
