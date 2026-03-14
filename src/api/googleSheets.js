@@ -240,26 +240,39 @@ async function _ensureAllTabs() {
     await _apiBatchUpdate({ requests })
   }
 
-  // Write ALL headers in one batched API call (avoids per-tab 429 bursts).
-  // Uses values.batchUpdate — single write regardless of tab count.
-  // Safe to re-run: always writes to row 1 which is idempotent.
-  const data = needed
-    .filter(tab => SCHEMA[tab])
-    .map(tab => ({
-      range:          `${tab}!A1`,
-      majorDimension: 'ROWS',
-      values:         [SCHEMA[tab]]
-    }))
+  // Check which tabs already have a header row via a single batchGet.
+  // On subsequent boots (after initial setup) this will be 0 writes — no 429 risk.
+  const schemaTabs = needed.filter(tab => SCHEMA[tab])
+  const ranges     = schemaTabs.map(tab => `${tab}!A1`)
+  debug(CAT, `batchGet to check existing headers for ${schemaTabs.length} tabs`)
+  const batchRes   = await _withRetry(() =>
+    _apiGet(`values:batchGet?${ranges.map(r => `ranges=${encodeURIComponent(r)}`).join('&')}`)
+  )
+  const valueRanges = batchRes.valueRanges ?? []
+
+  const data = schemaTabs
+    .map((tab, i) => {
+      const existing = valueRanges[i]?.values?.[0]
+      if (existing && existing.length > 0) return null   // header already present
+      return {
+        range:          `${tab}!A1`,
+        majorDimension: 'ROWS',
+        values:         [SCHEMA[tab]]
+      }
+    })
+    .filter(Boolean)
 
   if (data.length > 0) {
-    debug(CAT, `Writing headers for ${data.length} tabs in single batch call`)
+    info(CAT, `Writing headers for ${data.length} tab(s) (skipped ${schemaTabs.length - data.length} already-populated)`)
     await _withRetry(() =>
       _apiPost(
         `values:batchUpdate`,
         { valueInputOption: 'USER_ENTERED', data }
       )
     )
-    info(CAT, 'All tab headers written')
+    info(CAT, 'Tab headers written')
+  } else {
+    debug(CAT, 'All tab headers already present — skipping write')
   }
 }
 
