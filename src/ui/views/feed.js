@@ -120,7 +120,7 @@ function _tradeCardHTML(trade) {
 
 // ─── Main render ─────────────────────────────────────────────────────────────
 
-export async function renderFeed(container, { navigate } = {}) {
+export function renderFeed(container) {
   const trades = MOCK_TRADES
 
   // Page header

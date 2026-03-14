@@ -1,14 +1,15 @@
 /**
- * App shell renderer — home-first drill-down navigation.
- * Exposes window._navigate(viewName, params={}) globally.
+ * App shell — home-first drill-down navigation.
+ * navigate() is intentionally SYNCHRONOUS — all Phase 1 views are mock data.
+ * window._navigate exposed globally for inline onclick handlers.
  */
 
-import { info }             from '../services/logger.js'
-import { renderHome }       from './views/home.js'
-import { renderFeed }       from './views/feed.js'
-import { renderPositions }  from './views/positions.js'
-import { renderSettings }   from './views/settings.js'
-import { renderWhatToBuy }  from './views/whatToBuy.js'
+import { info }            from '../services/logger.js'
+import { renderHome }      from './views/home.js'
+import { renderFeed }      from './views/feed.js'
+import { renderPositions } from './views/positions.js'
+import { renderSettings }  from './views/settings.js'
+import { renderWhatToBuy } from './views/whatToBuy.js'
 
 const CAT = 'APP_SHELL'
 
@@ -27,11 +28,7 @@ export function renderApp({ spreadsheetId }) {
           <button class="settings-btn btn btn-ghost" id="settings-btn" aria-label="Settings">⚙</button>
         </div>
       </header>
-      <main class="app-content" id="view-content">
-        <div class="empty-state">
-          <div class="loading-mark">···</div>
-        </div>
-      </main>
+      <main class="app-content" id="view-content"></main>
     </div>
     <div id="toast-container"></div>
   `
@@ -40,59 +37,38 @@ export function renderApp({ spreadsheetId }) {
   const backBtn     = document.getElementById('back-btn')
   const settingsBtn = document.getElementById('settings-btn')
   let   activeView  = null
-  let   _navigating = false
 
-  async function navigate(viewName, params = {}) {
-    if (_navigating) return                                       // drop clicks while a navigation is in progress
-    if (viewName === activeView && viewContent.children.length > 0) return
-    _navigating = true
+  function navigate(viewName) {
+    if (viewName === activeView) return
     activeView = viewName
 
-    info(CAT, `Navigate to: ${viewName}`)
+    info(CAT, `Navigate: ${viewName}`)
 
-    // Show/hide back button
-    if (viewName === 'home') {
-      backBtn.classList.add('hidden')
-    } else {
-      backBtn.classList.remove('hidden')
-    }
-
-    // Hide settings gear when already on settings
+    backBtn.classList.toggle('hidden', viewName === 'home')
     settingsBtn.classList.toggle('hidden', viewName === 'settings')
 
-    viewContent.innerHTML = `<div class="empty-state"><div class="loading-sub">Loading...</div></div>`
+    viewContent.innerHTML = ''
 
     try {
-      const ctx = { navigate }
-      if      (viewName === 'home')       await renderHome(viewContent, ctx)
-      else if (viewName === 'feed')       await renderFeed(viewContent, ctx)
-      else if (viewName === 'positions')  await renderPositions(viewContent, ctx)
-      else if (viewName === 'settings')   await renderSettings(viewContent, ctx)
-      else if (viewName === 'whatToBuy')  await renderWhatToBuy(viewContent, ctx)
-      else {
-        viewContent.innerHTML = `
-          <div class="empty-state">
-            <div class="empty-state-title">Unknown view</div>
-            <div class="empty-state-sub">"${viewName}" is not registered.</div>
-          </div>`
-      }
+      if      (viewName === 'home')      renderHome(viewContent)
+      else if (viewName === 'feed')      renderFeed(viewContent)
+      else if (viewName === 'positions') renderPositions(viewContent)
+      else if (viewName === 'settings')  renderSettings(viewContent)
+      else if (viewName === 'whatToBuy') renderWhatToBuy(viewContent)
     } catch (e) {
-      // Surface the error clearly so it's visible during development
-      console.error('[APP]', e)
+      console.error('[APP] render error:', e)
       viewContent.innerHTML = `
         <div class="empty-state">
           <div class="empty-state-title">Something went wrong</div>
           <div class="empty-state-sub">${e.message}</div>
         </div>`
-    } finally {
-      _navigating = false
     }
   }
 
-  // Expose globally so any view can call window._navigate(...)
+  // Expose globally — all views use window._navigate('viewName') in onclick
   window._navigate = navigate
 
-  backBtn.addEventListener('click', () => navigate('home'))
+  backBtn.addEventListener('click',    () => navigate('home'))
   settingsBtn.addEventListener('click', () => navigate('settings'))
 
   navigate('home')

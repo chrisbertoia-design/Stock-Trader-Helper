@@ -14,7 +14,7 @@ const QUICK_AMOUNTS = [100, 250, 500, 1000]
 const MIN_AMOUNT = 50
 const MAX_AMOUNT = 10000
 
-export async function renderWhatToBuy(container, { navigate } = {}) {
+export function renderWhatToBuy(container) {
   container.innerHTML = _renderStep1()
 
   // Attach event listeners for step 1
