@@ -65,9 +65,7 @@ export function renderHome(container) {
       <div class="home-cards">
 
         <!-- What's New -->
-        <div class="home-card" role="button" tabindex="0"
-             onclick="window._navigate('feed')"
-             onkeydown="if(event.key==='Enter'||event.key===' ')window._navigate('feed')">
+        <button class="home-card" onclick="window._navigate('feed')">
           <div class="home-card-header">
             <span class="home-card-title">
               What's New
@@ -77,12 +75,10 @@ export function renderHome(container) {
           </div>
           <div class="home-card-value">${newCount} trade${newCount !== 1 ? 's' : ''} since your last visit</div>
           <div class="home-card-sub">${topTrade.politician} · ${topTrade.ticker} · ${topTrade.action} · ${topTrade.when}</div>
-        </div>
+        </button>
 
         <!-- Top Signal -->
-        <div class="home-card" role="button" tabindex="0"
-             onclick="window._navigate('feed')"
-             onkeydown="if(event.key==='Enter'||event.key===' ')window._navigate('feed')">
+        <button class="home-card" onclick="window._navigate('feed')">
           <div class="home-card-header">
             <span class="home-card-title">Top Signal</span>
             <span class="home-card-chevron">›</span>
@@ -93,12 +89,10 @@ export function renderHome(container) {
             <span style="color:var(--text-secondary);">· ${flags}</span>
           </div>
           <div class="home-card-sub">${stat}</div>
-        </div>
+        </button>
 
         <!-- My Portfolio -->
-        <div class="home-card" role="button" tabindex="0"
-             onclick="window._navigate('positions')"
-             onkeydown="if(event.key==='Enter'||event.key===' ')window._navigate('positions')">
+        <button class="home-card" onclick="window._navigate('positions')">
           <div class="home-card-header">
             <span class="home-card-title">My Portfolio</span>
             <span class="home-card-chevron">›</span>
@@ -114,19 +108,17 @@ export function renderHome(container) {
           <div style="font-size:12px;color:${alignColor};font-weight:500;margin-top:6px;">
             ● ${alignment_score}
           </div>
-        </div>
+        </button>
 
         <!-- What to Buy -->
-        <div class="home-card" role="button" tabindex="0"
-             onclick="window._navigate('whatToBuy')"
-             onkeydown="if(event.key==='Enter'||event.key===' ')window._navigate('whatToBuy')">
+        <button class="home-card" onclick="window._navigate('whatToBuy')">
           <div class="home-card-header">
             <span class="home-card-title">What to Buy</span>
             <span class="home-card-chevron">›</span>
           </div>
           <div class="home-card-value">Ready to invest?</div>
           <div class="home-card-sub">Enter an amount to get slice picks</div>
-        </div>
+        </button>
 
       </div>
     </div>

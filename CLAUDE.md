@@ -145,6 +145,19 @@ Structured logger in `src/services/logger.js`. Levels: DEBUG, INFO, WARN, ERROR.
 - On errors: log to `bad.md`, try one fix, surface to user with context if it fails
 - `CLAUDE.md` updates triggered by user-confirmed success ("that works", "ship it"), not every commit
 
+## GitHub Pages / Mobile Deployment
+- **URL**: `https://chrisbertoia-design.github.io/Stock-Trader-Helper/`
+- **Auto-deploys** on every push to `claude/web-app-google-sheets-wt63b` via `.github/workflows/deploy.yml`
+- **Env vars**: `VITE_GOOGLE_CLIENT_ID` + `VITE_AI_PROVIDER` in `.env.production` (committed). `VITE_GEMINI_API_KEY` set as GitHub Actions secret.
+- **Google OAuth**: `https://chrisbertoia-design.github.io` must be in Authorized JavaScript origins in Google Console — ✅ done
+- **iOS Safari clickability**: Never use `div onclick` for navigation. Always use `<button>` elements — iOS Safari does not reliably fire click on divs even with `cursor:pointer` and inline `onclick`.
+
+## User Devices & Testing Environment
+- **Browser**: Chrome exclusively — on both Mac and mobile (iOS Chrome)
+- **Devices**: Mac (primary dev/review) + iPhone (mobile testing via GitHub Pages)
+- **Workflow**: Develops and reviews on Mac, bounces to iPhone for mobile QA via `https://chrisbertoia-design.github.io/Stock-Trader-Helper/`
+- **Note**: iOS Chrome uses WebKit under the hood (Apple App Store rule) — same `<button>` tap-target rules apply as iOS Safari
+
 ## Known Backlog
 - **P2**: PARTY_ROSTER config-driven (party_roster_d/r keys in config tab)
 - **P2**: Positions stale-data warning when last_csv_upload > N days

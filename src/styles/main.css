@@ -377,6 +377,12 @@ body {
 
 /* Home card — tap affordance variant of .card */
 .home-card {
+  /* button element resets */
+  width: 100%;
+  text-align: left;
+  font-family: var(--font-sans);
+  font-size: inherit;
+  /* card styles */
   background: var(--bg-raised);
   border: 1px solid var(--border-subtle);
   border-radius: var(--r3);
