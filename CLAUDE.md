@@ -30,13 +30,15 @@ src/
     config.js              # Config store — reads/writes Sheets `config` tab, single source of truth
     positions.js           # Positions store — reads/writes `my_positions` tab, in-flight dedup
   ui/
-    app.js                 # App shell, tab routing (activeView guard: starts null)
+    app.js                 # App shell — home-first drill-down routing, navigate(viewName) pattern
     components/
       toast.js             # Toast notification component
     views/
       connect.js           # Google OAuth one-button sign-in, silent refresh, spreadsheet auto-create
-      feed.js              # Trade feed — HSW data filtered by watchlist
+      home.js              # Home dashboard — 4 summary cards (What's New, Signal, Portfolio, Buy)
+      feed.js              # Feed drill-down — 3-state trade cards (collapsed/expanded/followed/ignored)
       positions.js         # Positions view — CSV upload, stat summary, position cards
+      whatToBuy.js         # What to Buy — $X input + ranked mock slice picks with alignment indicator
       followModal.js       # AI follow/ignore decision modal
       settings.js          # Settings view — editable config keys
 styles/
@@ -51,6 +53,9 @@ vite.config.js             # Port 5175, /api/hsw proxy (dev CORS fix), VitePWA, 
 ```
 
 ## Key Architecture Decisions
+- **Navigation**: Home dashboard + drill-down. `navigate(viewName)` in `app.js`. Back button in header. All views receive `(container, { navigate })`. `window._navigate` exposed globally.
+- **UI-first build order**: All views use hardcoded mock data in Phase 1. Real API wiring happens in Phase 3. Never import from stores/api in views during UI build phase.
+- **Async render pattern**: `navigate()` must `await` async render calls or errors silently escape the try/catch. Always wrap render dispatch in `async/await`.
 - **Non-blocking boot**: `renderApp()` fires immediately after auth check. Sheets init runs in background `_connectSheets()`. App never shows a loading screen after auth.
 - **Sheets as DB**: 9 tabs — `config`, `log`, `watchlist`, `disclosures`, `consensus`, `recommendations`, `my_decisions`, `my_allocations`, `my_positions`. All writes use `values:batchUpdate`. All reads use `values:batchGet` for dedup.
 - **In-flight dedup**: Both HSW fetch (`_fetchInFlight`) and positions load (`_loadInFlight`) deduplicate concurrent callers. Never fires two parallel Sheets/S3 requests for the same resource.

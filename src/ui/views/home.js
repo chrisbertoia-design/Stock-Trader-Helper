@@ -4,8 +4,6 @@
  * Uses mock data except Portfolio which pulls from positions store.
  */
 
-import { getPositionsSummary } from '../../stores/positions.js'
-
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 function getGreeting() {
@@ -60,10 +58,12 @@ const MOCK_SIGNAL = {
 }
 
 const MOCK_PORTFOLIO = {
-  account_total: 12450,
-  total_gl_pct:  2.3,
-  position_count: 8,
-  last_csv_upload: '',
+  account_total:    12450,
+  total_gl_pct:     2.3,
+  position_count:   8,
+  last_updated:     'Mar 11, 2026',
+  last_purchase:    'Mar 7, 2026',
+  alignment_score:  '2 of 3 aligned',
 }
 
 // ── Card builders ─────────────────────────────────────────────────────────────
@@ -121,21 +121,19 @@ function buildTopSignalCard(navigate) {
 }
 
 function buildPortfolioCard(navigate) {
-  let summary
-  try {
-    summary = getPositionsSummary()
-  } catch (_) {
-    summary = null
+  const { account_total, total_gl_pct, position_count, last_updated, last_purchase, alignment_score } = MOCK_PORTFOLIO
+
+  const pctClass = total_gl_pct >= 0 ? 'text-buy' : 'text-sell'
+
+  const alignMatch = alignment_score.match(/^(\d+) of (\d+)/)
+  let alignColor = 'var(--sell)'
+  if (alignMatch) {
+    const n = parseInt(alignMatch[1], 10)
+    const total = parseInt(alignMatch[2], 10)
+    if (n === total)      alignColor = 'var(--buy)'
+    else if (n >= total - 1) alignColor = 'var(--accent)'
+    else                  alignColor = 'var(--sell)'
   }
-
-  // Fall back to mock if store returns $0 (no data loaded yet)
-  const useMock = !summary || summary.account_total === 0
-  const total    = useMock ? MOCK_PORTFOLIO.account_total   : summary.account_total
-  const pct      = useMock ? MOCK_PORTFOLIO.total_gl_pct    : summary.total_gl_pct
-  const count    = useMock ? MOCK_PORTFOLIO.position_count  : summary.position_count
-  const updated  = useMock ? 'updated 3 days ago'           : `updated ${fmtUploadAge(summary.last_csv_upload)}`
-
-  const pctClass = pct >= 0 ? 'text-buy' : 'text-sell'
 
   const card = document.createElement('div')
   card.className = 'home-card'
@@ -147,10 +145,16 @@ function buildPortfolioCard(navigate) {
       <span class="home-card-chevron">›</span>
     </div>
     <div class="home-card-value">
-      <span class="portfolio-total">${fmt$(total)}</span>
-      <span class="portfolio-pct ${pctClass}">${fmtPct(pct)}</span>
+      <span class="portfolio-total">${fmt$(account_total)}</span>
+      <span class="portfolio-pct ${pctClass}">${fmtPct(total_gl_pct)}</span>
     </div>
-    <div class="home-card-sub">${count} position${count !== 1 ? 's' : ''} · ${updated}</div>
+    <div class="home-card-sub">${position_count} position${position_count !== 1 ? 's' : ''}</div>
+    <div class="home-card-sub" style="margin-top:4px; font-size:12px; color:var(--text-tertiary)">
+      Updated ${last_updated} · Last buy ${last_purchase}
+    </div>
+    <div class="home-card-sub" style="margin-top:6px; color:${alignColor}; font-size:12px; font-weight:500">
+      ● ${alignment_score}
+    </div>
   `
   card.addEventListener('click', () => navigate('positions'))
   card.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') navigate('positions') })

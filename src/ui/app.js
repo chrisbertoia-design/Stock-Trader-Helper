@@ -41,7 +41,7 @@ export function renderApp({ spreadsheetId }) {
   const settingsBtn = document.getElementById('settings-btn')
   let   activeView  = null
 
-  function navigate(viewName, params = {}) {
+  async function navigate(viewName, params = {}) {
     if (viewName === activeView && viewContent.children.length > 0) return
     activeView = viewName
 
@@ -61,11 +61,11 @@ export function renderApp({ spreadsheetId }) {
 
     try {
       const ctx = { navigate }
-      if      (viewName === 'home')       renderHome(viewContent, ctx)
-      else if (viewName === 'feed')       renderFeed(viewContent, ctx)
-      else if (viewName === 'positions')  renderPositions(viewContent, ctx)
-      else if (viewName === 'settings')   renderSettings(viewContent, ctx)
-      else if (viewName === 'whatToBuy')  renderWhatToBuy(viewContent, ctx)
+      if      (viewName === 'home')       await renderHome(viewContent, ctx)
+      else if (viewName === 'feed')       await renderFeed(viewContent, ctx)
+      else if (viewName === 'positions')  await renderPositions(viewContent, ctx)
+      else if (viewName === 'settings')   await renderSettings(viewContent, ctx)
+      else if (viewName === 'whatToBuy')  await renderWhatToBuy(viewContent, ctx)
       else {
         viewContent.innerHTML = `
           <div class="empty-state">
@@ -74,6 +74,8 @@ export function renderApp({ spreadsheetId }) {
           </div>`
       }
     } catch (e) {
+      // Surface the error clearly so it's visible during development
+      console.error('[APP]', e)
       viewContent.innerHTML = `
         <div class="empty-state">
           <div class="empty-state-title">Something went wrong</div>
