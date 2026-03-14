@@ -22,6 +22,11 @@ Single `values:batchUpdate` call for all config writes via `writeConfigBatch()`.
 to check existing headers before writing. Avoids 429 rate limits from sequential per-cell API calls.
 **Reuse**: any multi-key Sheets write — always batch.
 
+## 2026-03-14 | Use ~/repo-name in terminal instructions, not full /home/user/... paths
+Always write terminal blocks as `cd ~/Stock-Trader-Helper` — user closes and reopens terminals between sessions,
+`~` works universally regardless of home directory. Full paths are fragile and harder to read.
+**Reuse**: every terminal block in every response.
+
 ## 2026-03-14 | AbortController timeouts on all fetches
 `_timedFetch()` (10s Sheets) and HSW fetch (15s) use AbortController to prevent hung connections.
 Avoids UI lockups when network is slow or S3/Sheets is unresponsive.
