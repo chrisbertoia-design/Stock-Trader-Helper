@@ -3,6 +3,10 @@ import { VitePWA } from 'vite-plugin-pwa'
 
 export default defineConfig({
   base: '/Stock-Trader-Helper/',
+  server: {
+    port: 9000,
+    strictPort: true,
+  },
   plugins: [
     VitePWA({
       registerType: 'autoUpdate',
