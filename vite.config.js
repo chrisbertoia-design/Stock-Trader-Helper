@@ -4,7 +4,7 @@ import { VitePWA } from 'vite-plugin-pwa'
 export default defineConfig({
   base: '/Stock-Trader-Helper/',
   server: {
-    port: 9000,
+    port: 5175,
     strictPort: true,
   },
   plugins: [
