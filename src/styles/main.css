@@ -591,3 +591,50 @@ body {
   .home-greeting { font-size: 22px; }
   .home-card-value { font-size: 15px; }
 }
+
+/* ── Desktop responsive ── */
+@media (min-width: 600px) {
+  :root {
+    --s5: 28px;   /* slightly more generous padding */
+    --s6: 40px;
+  }
+
+  .app-shell {
+    max-width: 680px;
+    margin: 0 auto;
+    /* subtle side border so it doesn't look lost on a wide screen */
+    border-left: 1px solid var(--border-subtle);
+    border-right: 1px solid var(--border-subtle);
+    box-shadow: 0 0 80px rgba(0,0,0,0.6);
+  }
+
+  body {
+    background: #080808;   /* slightly darker outside the app shell */
+  }
+
+  .app-wordmark {
+    font-size: 20px;
+  }
+
+  .home-greeting {
+    font-size: 32px;
+  }
+
+  .home-card-value {
+    font-size: 20px;
+  }
+
+  .home-card {
+    padding: var(--s6);   /* more generous card padding on desktop */
+  }
+
+  .app-content {
+    padding: var(--s6);
+  }
+}
+
+@media (min-width: 900px) {
+  .app-shell {
+    max-width: 760px;
+  }
+}
