@@ -9,7 +9,7 @@ import { parseTransactionsCsv, derivePositions, parsePositionsCsv }
 import { readTab, appendRows }    from '../../api/googleSheets.js'
 import { info, warn }             from '../../services/logger.js'
 import { showToast }              from '../components/toast.js'
-import { MOCK_POSITIONS, MOCK_LAST_UPDATE, MOCK_ACCOUNT } from '../../data/mockPositions.js'
+import { MOCK_POSITIONS, MOCK_LAST_UPDATE, MOCK_ACCOUNT, ACCOUNT_SUMMARY } from '../../data/mockPositions.js'
 
 const CAT = 'POSITIONS_VIEW'
 
@@ -56,10 +56,10 @@ export async function renderPositions(container) {
   }
 
   const sortedTickers = Object.keys(positions).sort((a, b) => {
-    return (positions[b].mkt_value || 0) - (positions[a].mkt_value || 0)
+    return (positions[b].mkt_val || positions[b].mkt_value || 0) - (positions[a].mkt_val || positions[a].mkt_value || 0)
   })
 
-  const totalValue = sortedTickers.reduce((sum, t) => sum + (positions[t].mkt_value || 0), 0)
+  const totalValue = sortedTickers.reduce((sum, t) => sum + (positions[t].mkt_val || positions[t].mkt_value || 0), 0)
 
   container.innerHTML = `
     <div class="positions-header" style="margin-bottom:var(--s5);">
@@ -80,12 +80,22 @@ export async function renderPositions(container) {
 
       <div class="stat-row">
         <div class="stat">
-          <span class="stat-value">$${totalValue.toFixed(2)}</span>
-          <span class="stat-label">Total Value</span>
+          <span class="stat-value">$${(ACCOUNT_SUMMARY?.account_total || totalValue).toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2})}</span>
+          <span class="stat-label">Account Total</span>
+        </div>
+        <div class="stat">
+          <span class="stat-value" style="color:${(ACCOUNT_SUMMARY?.total_gl_pct||0) >= 0 ? 'var(--buy)' : 'var(--sell)'}">
+            ${(ACCOUNT_SUMMARY?.total_gl_pct||0) >= 0 ? '+' : ''}${(ACCOUNT_SUMMARY?.total_gl_pct||0).toFixed(2)}%
+          </span>
+          <span class="stat-label">Total G/L</span>
         </div>
         <div class="stat">
           <span class="stat-value">${sortedTickers.length}</span>
           <span class="stat-label">Positions</span>
+        </div>
+        <div class="stat">
+          <span class="stat-value">$${(ACCOUNT_SUMMARY?.cash||0).toFixed(2)}</span>
+          <span class="stat-label">Cash</span>
         </div>
       </div>
     </div>
@@ -104,21 +114,22 @@ export async function renderPositions(container) {
 }
 
 function _renderPositionRow(pos) {
-  const gl    = pos.gain_loss || 0
-  const glPct = pos.gain_loss_pct || 0
-  const glPos = gl >= 0
+  const mktVal = pos.mkt_val ?? pos.mkt_value ?? 0
+  const qty    = pos.qty ?? pos.quantity ?? 0
+  const glPct  = pos.gl_pct ?? pos.gain_loss_pct ?? 0
+  const glPos  = glPct >= 0
 
   return `
     <div class="card" style="padding:var(--s4);">
       <div style="display:flex; align-items:center; justify-content:space-between;">
         <div>
           <span style="font-family:var(--font-mono); font-size:15px; font-weight:600;">${pos.ticker}</span>
-          <span style="font-size:12px; color:var(--text-tertiary); margin-left:var(--s2);">${pos.quantity} shares</span>
+          <span style="font-size:12px; color:var(--text-tertiary); margin-left:var(--s2);">${qty} shares</span>
         </div>
         <div style="text-align:right;">
-          <div style="font-size:14px; font-weight:500;">${pos.mkt_value ? '$' + pos.mkt_value.toFixed(2) : '—'}</div>
-          ${gl !== 0 ? `<div style="font-size:11px; color:${glPos ? 'var(--buy)' : 'var(--sell)'}">
-            ${glPos ? '+' : ''}$${gl.toFixed(2)} (${glPos ? '+' : ''}${glPct.toFixed(1)}%)
+          <div style="font-size:14px; font-weight:500;">${mktVal ? '$' + mktVal.toFixed(2) : '—'}</div>
+          ${glPct !== 0 ? `<div style="font-size:11px; color:${glPos ? 'var(--buy)' : 'var(--sell)'}">
+            ${glPos ? '+' : ''}${glPct.toFixed(2)}%
           </div>` : ''}
         </div>
       </div>
