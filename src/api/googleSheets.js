@@ -225,6 +225,19 @@ export async function updateCell(a1, value) {
   )
 }
 
+/**
+ * Clear all data rows in a tab (A2:ZZ), preserving the header row.
+ * Used before re-writing positions after a CSV upload (replace, not append).
+ */
+export async function clearTab(tabName) {
+  debug(CAT, `clearTab: ${tabName}`)
+  await _apiPost(
+    `values/${encodeURIComponent(tabName + '!A2:ZZ')}:clear`,
+    {}
+  )
+  info(CAT, `clearTab: ${tabName} data rows cleared`)
+}
+
 // ─── Log writer (used by logger.js) ──────────────────────────────────────────
 
 export async function writeLogEntries(entries) {
