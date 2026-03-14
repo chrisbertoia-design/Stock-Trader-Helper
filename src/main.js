@@ -1,85 +1,82 @@
 /**
- * App entry point.
- * Boot sequence:
- *   1. Show loading screen
- *   2. Check for existing Google auth token
- *   3. Init Sheets (creates tabs + headers if needed)
- *   4. Wire up logger to Sheets
- *   5. Load config
- *   6. Fetch politician trades
- *   7. Render app shell
+ * Boot sequence — mirrors GoogleAuthService.getValidToken() logic from iOS.
+ *
+ *  1. Check localStorage for stored auth
+ *  2. If token age > 50min → attempt silent refresh (no popup)
+ *  3. If no stored auth → show sign-in screen
+ *  4. Init Sheets → wire logger → load config → render app
  */
 
 import { initSheets, writeLogEntries } from './api/googleSheets.js'
 import { initLogger, info, error }     from './services/logger.js'
-import { loadConfig, get }             from './stores/config.js'
+import { loadConfig }                  from './stores/config.js'
 import { renderApp }                   from './ui/app.js'
+import { loadAuth, trySilentRefresh, startOAuthFlow } from './ui/views/connect.js'
+
+const TOKEN_MAX_AGE_MS = 50 * 60 * 1000  // 50 min (tokens expire at 60min)
 
 async function boot() {
-  // Logger starts writing to console immediately
-  // Sheets writer injected after auth
   initLogger({ sheetsWriter: null, minLevel: 'DEBUG' })
-
   info('BOOT', 'App starting')
 
-  // Check stored auth
-  const stored = _getStoredAuth()
-  if (!stored) {
-    info('BOOT', 'No stored auth — showing connect screen')
-    renderConnectScreen()
+  const stored = loadAuth()
+
+  if (!stored?.spreadsheetId) {
+    info('BOOT', 'No auth stored — showing sign-in')
+    startOAuthFlow()
     return
   }
 
+  // Check if token needs refresh
+  let { accessToken, spreadsheetId, tokenTs } = stored
+  const age = Date.now() - (tokenTs || 0)
+
+  if (age > TOKEN_MAX_AGE_MS) {
+    info('BOOT', `Token age ${Math.round(age/60000)}min — attempting silent refresh`)
+    const refreshed = await trySilentRefresh()
+    if (refreshed) {
+      accessToken = refreshed
+    } else {
+      info('BOOT', 'Silent refresh failed — showing sign-in')
+      startOAuthFlow()
+      return
+    }
+  }
+
   try {
-    const { spreadsheetId, accessToken } = stored
     await initSheets(spreadsheetId, accessToken)
 
-    // Now wire logger to Sheets
     initLogger({
       sheetsWriter: (entries) => writeLogEntries(entries),
       minLevel: 'DEBUG'
     })
 
     await loadConfig()
-    info('BOOT', 'Boot complete — rendering app')
+    info('BOOT', 'Boot complete')
     renderApp({ spreadsheetId })
   } catch (err) {
     error('BOOT', 'Boot failed', err.message)
-    renderConnectScreen({ error: err.message })
+    // Token may have expired mid-session — try sign-in
+    if (err.message?.includes('401') || err.message?.includes('403')) {
+      info('BOOT', 'Auth error — clearing and re-prompting')
+      localStorage.removeItem('sth_auth')
+      startOAuthFlow()
+    } else {
+      _showError(err.message)
+    }
   }
 }
 
-function _getStoredAuth() {
-  try {
-    const raw = localStorage.getItem('gauth')
-    if (!raw) return null
-    const parsed = JSON.parse(raw)
-    // Tokens expire — check if we have at least a spreadsheet ID
-    if (!parsed.spreadsheetId) return null
-    return parsed
-  } catch { return null }
-}
-
-function renderConnectScreen({ error: err } = {}) {
+function _showError(msg) {
   document.getElementById('app').innerHTML = `
-    <div class="connect-screen">
-      <div class="connect-inner">
-        <div class="connect-mark">STH</div>
-        <div class="connect-title">Stock Trader Helper</div>
-        <div class="connect-sub">Mirror congressional trades intelligently</div>
-        ${err ? `<div class="connect-error">${err}</div>` : ''}
-        <button class="btn btn-primary" id="connect-btn">Connect Google Sheets</button>
-        <div class="connect-hint">
-          You'll need a Google account and a Sheets spreadsheet ID.<br>
-          The app creates all tabs automatically.
-        </div>
-      </div>
+    <div style="height:100vh; display:flex; flex-direction:column;
+      align-items:center; justify-content:center; gap:var(--s3); padding:var(--s5);">
+      <div style="font-size:14px; color:var(--text-secondary);">Something went wrong</div>
+      <div style="font-size:12px; color:var(--text-tertiary); max-width:300px;
+        text-align:center; line-height:1.6;">${msg}</div>
+      <button class="btn btn-ghost" onclick="window.location.reload()">Retry</button>
     </div>
   `
-
-  document.getElementById('connect-btn').addEventListener('click', () => {
-    import('./ui/views/connect.js').then(m => m.startOAuthFlow())
-  })
 }
 
 boot()
