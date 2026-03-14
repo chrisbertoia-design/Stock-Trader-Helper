@@ -1,212 +1,240 @@
 /**
- * Feed view — the primary screen.
- * Shows:
- *   - Consensus signal banner (if any active)
- *   - "New since last visit" count
- *   - Trade cards for watched politicians
- *   - Decision buttons: Follow | Pass | Not Now
+ * Feed view — drill-down screen showing recent politician trade disclosures.
+ * 3-state cards: collapsed → expanded → followed/ignored
+ * Uses hardcoded mock data (Phase 3 will wire real HSW API).
  */
 
-import { fetchAllTransactions, filterByWatchlist, getNewSinceLastVisit, computeConsensusSignals }
-  from '../../api/houseStockWatcher.js'
-import { ask, Prompts }                from '../../api/ai/index.js'
-import { appendRows }                  from '../../api/googleSheets.js'
-import { getConfig }                   from '../../stores/config.js'
-import { debug, info, warn }           from '../../services/logger.js'
-import { showToast }                   from '../components/toast.js'
-import { WATCHLIST }                   from '../../data/watchlist.js'
-import { getPositions, loadPositions, isLoaded } from '../../stores/positions.js'
+const MOCK_TRADES = [
+  { id: '1', politician_name: 'Nancy Pelosi',    party: 'D', ticker: 'NVDA', action: 'buy',  amount_low: 250001,  amount_high: 500000,   transaction_date: '2026-03-11', disclosed_date: '2026-03-13' },
+  { id: '2', politician_name: 'Dan Crenshaw',    party: 'R', ticker: 'MSFT', action: 'buy',  amount_low: 15001,   amount_high: 50000,    transaction_date: '2026-03-10', disclosed_date: '2026-03-12' },
+  { id: '3', politician_name: 'Ro Khanna',       party: 'D', ticker: 'AAPL', action: 'sell', amount_low: 50001,   amount_high: 100000,   transaction_date: '2026-03-08', disclosed_date: '2026-03-11' },
+  { id: '4', politician_name: 'Tommy Tuberville', party: 'R', ticker: 'AMD', action: 'buy',  amount_low: 100001,  amount_high: 250000,   transaction_date: '2026-03-07', disclosed_date: '2026-03-10' },
+  { id: '5', politician_name: 'Nancy Pelosi',    party: 'D', ticker: 'TSM',  action: 'buy',  amount_low: 500001,  amount_high: 1000000,  transaction_date: '2026-03-05', disclosed_date: '2026-03-09' },
+]
 
-const CAT = 'FEED'
+// Hardcoded AI summary mock text, keyed by trade id
+const MOCK_AI_SUMMARIES = {
+  '1': 'Pelosi has traded NVDA 3x in the past 6 months. This buy follows recent AI chip export policy discussions. The timing aligns closely with committee briefings on semiconductor regulation. Insider timing pattern.',
+  '2': 'Crenshaw added MSFT ahead of a defense cloud contract renewal cycle. Microsoft holds several Pentagon contracts. Relatively modest position — could be routine portfolio rebalancing.',
+  '3': 'Khanna trimmed AAPL after publicly raising antitrust concerns about Big Tech. The sell reduces potential conflict-of-interest optics ahead of upcoming tech hearings.',
+  '4': 'Tuberville entered AMD during a period of increased GPU demand discourse in Congress. AMD has benefited from NVDA export restrictions. Agriculture committee member, limited direct oversight.',
+  '5': 'Pelosi made her largest TSM position in over a year. Taiwan Semiconductor is a focal point in US chip supply chain legislation. This trade preceded key CHIPS Act implementation discussions.',
+}
 
-// Party roster sizes for consensus calc (approximate, updated via config)
-const PARTY_ROSTER = { D: 213, R: 220 }
+// ─── Helpers ────────────────────────────────────────────────────────────────
 
-export async function renderFeed(container) {
-  info(CAT, 'renderFeed()')
-  container.innerHTML = `<div class="feed-loading empty-state"><div class="loading-sub">Fetching trades...</div></div>`
+function _relativeDate(dateStr) {
+  const diff = Date.now() - new Date(dateStr).getTime()
+  const days = Math.floor(diff / 86_400_000)
+  if (days === 0) return 'today'
+  if (days === 1) return 'yesterday'
+  return `${days} days ago`
+}
 
-  if (!isLoaded()) {
-    try { await loadPositions() } catch (e) { warn(CAT, 'Positions load failed', e.message) }
-  }
+function _fmtAmount(low, high) {
+  const fmt = n => n >= 1_000_000 ? `$${(n / 1_000_000).toFixed(0)}M` : `$${(n / 1000).toFixed(0)}k`
+  return `${fmt(low)}–${fmt(high)}`
+}
 
-  let transactions
-  try {
-    transactions = await fetchAllTransactions()
-  } catch (e) {
-    warn(CAT, 'Failed to load transactions', e.message)
-    container.innerHTML = `
-      <div class="empty-state">
-        <div class="empty-state-title">Could not load trade data</div>
-        <div class="empty-state-sub">${e.message}</div>
-        <button class="btn btn-ghost" onclick="window.location.reload()">Retry</button>
-      </div>`
+function _fmtDateShort(dateStr) {
+  // e.g. "2026-03-13" → "Mar 13"
+  const d = new Date(dateStr + 'T12:00:00') // noon avoids TZ edge cases
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+}
+
+// ─── Card HTML builders ──────────────────────────────────────────────────────
+
+function _partyBadge(party) {
+  const colorMap = { D: 'color:#6b9bd2;background:rgba(107,155,210,0.14);border-color:rgba(107,155,210,0.25)', R: 'color:#c47b6e;background:rgba(196,123,110,0.14);border-color:rgba(196,123,110,0.25)' }
+  const style = colorMap[party] || 'color:var(--text-tertiary);background:var(--bg-elevated);border-color:var(--border-soft)'
+  return `<span style="display:inline-flex;align-items:center;padding:1px 7px;border-radius:100px;font-size:11px;font-weight:600;letter-spacing:0.04em;border:1px solid;${style}">${party || 'U'}</span>`
+}
+
+function _tradeCardHTML(trade) {
+  const actionColor = trade.action === 'buy' ? 'var(--buy)' : 'var(--sell)'
+  const actionLabel = trade.action.toUpperCase()
+  const amount      = _fmtAmount(trade.amount_low, trade.amount_high)
+  const relDate     = _relativeDate(trade.transaction_date)
+  const disclosedFmt = _fmtDateShort(trade.disclosed_date)
+  const tradedFmt    = _fmtDateShort(trade.transaction_date)
+  const summary     = MOCK_AI_SUMMARIES[trade.id] || 'No summary available.'
+
+  return `
+<div class="card trade-card"
+     data-trade-id="${trade.id}"
+     style="cursor:pointer;transition:opacity 300ms ease,max-height 300ms ease,margin 300ms ease,padding 300ms ease;overflow:hidden;">
+
+  <!-- Collapsed body — always visible -->
+  <div class="trade-card-body" data-expand-target="${trade.id}">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:var(--s3);">
+      <div style="display:flex;align-items:center;gap:var(--s2);flex-wrap:wrap;min-width:0;">
+        ${_partyBadge(trade.party)}
+        <span style="font-size:14px;font-weight:500;color:var(--text-primary);white-space:nowrap;">${trade.politician_name}</span>
+      </div>
+      <span style="font-size:12px;color:var(--text-tertiary);white-space:nowrap;flex-shrink:0;">${relDate}</span>
+    </div>
+
+    <div style="display:flex;align-items:baseline;gap:var(--s3);margin-top:var(--s2);">
+      <span style="font-family:var(--font-mono);font-size:18px;font-weight:700;color:var(--text-primary);letter-spacing:-0.01em;">${trade.ticker}</span>
+      <span style="font-size:13px;font-weight:600;color:${actionColor};">${actionLabel}</span>
+      <span style="font-size:13px;color:var(--text-secondary);">${amount}</span>
+    </div>
+  </div>
+
+  <!-- Expanded section — hidden by default -->
+  <div class="trade-card-expanded" data-expanded-id="${trade.id}"
+       style="display:none;margin-top:var(--s4);">
+    <div style="
+      background:var(--bg-elevated);
+      border:1px solid var(--border-subtle);
+      border-radius:var(--r2);
+      padding:var(--s3) var(--s4);
+      font-size:13px;
+      color:var(--text-secondary);
+      line-height:1.65;">
+      <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.09em;color:var(--text-tertiary);margin-bottom:var(--s2);font-weight:600;">AI Summary</div>
+      ${summary}
+    </div>
+    <div style="margin-top:var(--s3);font-size:12px;color:var(--text-tertiary);">
+      Disclosed: ${disclosedFmt} &nbsp;·&nbsp; Traded: ${tradedFmt}
+    </div>
+  </div>
+
+  <!-- Action buttons -->
+  <div class="decision-row" style="margin-top:var(--s4);">
+    <button class="btn trade-follow-btn"
+            data-action="follow"
+            data-trade-id="${trade.id}"
+            style="background:rgba(127,184,131,0.12);color:var(--buy);border:1px solid rgba(127,184,131,0.2);">
+      Follow
+    </button>
+    <button class="btn btn-ghost trade-ignore-btn"
+            data-action="ignore"
+            data-trade-id="${trade.id}">
+      Ignore
+    </button>
+  </div>
+</div>
+`
+}
+
+// ─── Main render ─────────────────────────────────────────────────────────────
+
+export async function renderFeed(container, { navigate } = {}) {
+  const trades = MOCK_TRADES
+
+  // Page header
+  const headerHTML = `
+<div style="margin-bottom:var(--s5);">
+  <div style="font-size:18px;font-weight:600;color:var(--text-primary);letter-spacing:-0.01em;">Recent Trades</div>
+  <div style="font-size:12px;color:var(--text-secondary);margin-top:var(--s1);">${trades.length} trades &nbsp;·&nbsp; last 90 days</div>
+</div>
+`
+
+  if (trades.length === 0) {
+    container.innerHTML = headerHTML + `
+<div class="empty-state">
+  <div class="empty-state-title">No trades to show</div>
+  <div class="empty-state-sub">No recent politician disclosures found.</div>
+</div>`
     return
   }
 
-  const config         = getConfig()
-  const watchedNames   = WATCHLIST.map(p => p.name)
-  const newTrades      = getNewSinceLastVisit(transactions, watchedNames)
-  const recentTrades   = filterByWatchlist(transactions, watchedNames, { daysBack: 30 })
-  const consensusSignals = computeConsensusSignals(transactions, { config, partyRoster: PARTY_ROSTER })
+  container.innerHTML = headerHTML + `<div id="feed-cards">${trades.map(_tradeCardHTML).join('')}</div>`
 
-  info(CAT, `Feed loaded`, {
-    total_transactions: transactions.length,
-    new_since_visit: newTrades.length,
-    recent_watched: recentTrades.length,
-    consensus_signals: consensusSignals.length
-  })
-
-  const html = `
-    ${consensusSignals.length > 0 ? _renderConsensusBanner(consensusSignals) : ''}
-    ${newTrades.length > 0 ? `
-      <div class="feed-new-badge">
-        <span class="signal-pill">
-          <span class="signal-dot"></span>
-          ${newTrades.length} new since your last visit
-        </span>
-      </div>` : ''}
-    <div class="feed-header">
-      <h2 class="feed-title">Recent Disclosures</h2>
-      <span class="text-tertiary" style="font-size:12px">${recentTrades.length} trades · past 30 days</span>
-    </div>
-    <div id="trade-cards">
-      ${recentTrades.length === 0
-        ? `<div class="empty-state">
-             <div class="empty-state-title">No recent trades</div>
-             <div class="empty-state-sub">Watched politicians haven't filed disclosures in the past 30 days.</div>
-           </div>`
-        : recentTrades.slice(0, 20).map(_renderTradeCard).join('')
-      }
-    </div>
-  `
-
-  container.innerHTML = html
-  _attachDecisionHandlers(container, recentTrades)
+  _attachHandlers(container, trades)
 }
 
-function _renderConsensusBanner(signals) {
-  const top = signals[0]
-  const pct = Math.round(top.pct_of_party * 100)
-  const tierLabels = { 1: 'Elevated', 2: 'Strong Consensus', 3: 'Near-Unanimous' }
-  return `
-    <div class="consensus-banner card" style="border-color: rgba(232,213,176,0.3); background: var(--accent-glow); margin-bottom: var(--s4);">
-      <div class="card-header" style="margin-bottom: var(--s2);">
-        <div>
-          <div style="font-size:11px; text-transform:uppercase; letter-spacing:0.1em; color:var(--accent); font-weight:600; margin-bottom:4px;">
-            ${tierLabels[top.tier] || 'Signal'} · ${top.party === 'D' ? 'Democrats' : 'Republicans'}
-          </div>
-          <div class="card-title">${top.tickers} — ${pct}% of party traded</div>
-        </div>
-        <span class="badge ${top.tier === 3 ? 'badge-sell' : 'badge-neutral'}">${top.member_count} members</span>
-      </div>
-      <div class="card-meta">${top.window_days}-day window · ${top.member_count} of ${top.party_total} members</div>
-      <button class="btn btn-ghost" style="margin-top:var(--s3); font-size:12px;" data-action="explain-consensus" data-signal-idx="0">
-        Ask AI to explain this signal
-      </button>
-    </div>
-  `
-}
+// ─── Interaction logic ────────────────────────────────────────────────────────
 
-function _renderTradeCard(trade) {
-  const politician = WATCHLIST.find(p => p.name.toLowerCase() === trade.politician_name.toLowerCase())
-  const amountStr  = `$${(trade.amount_low/1000).toFixed(0)}K–$${(trade.amount_high/1000).toFixed(0)}K`
+function _attachHandlers(container, trades) {
+  // In-memory state: Map<tradeId, 'followed' | 'ignored'>
+  const cardState = new Map()
 
-  return `
-    <div class="card trade-card" data-trade-id="${trade.id}">
-      <div class="card-header">
-        <div>
-          <div style="display:flex; align-items:center; gap:var(--s2); margin-bottom:var(--s1);">
-            <span class="badge ${trade.action === 'buy' ? 'badge-buy' : 'badge-sell'}">
-              ${trade.action.toUpperCase()}
-            </span>
-            <span style="font-size:18px; font-weight:700; letter-spacing:-0.02em; font-family:var(--font-mono)">
-              ${trade.ticker}
-            </span>
-          </div>
-          <div class="card-title">${trade.politician_name}</div>
-          <div class="card-meta">
-            ${politician ? `${politician.party} · ${politician.chamber}` : ''}
-            ${politician?.category === 'gang8' ? ' · Gang of 8' : ''}
-          </div>
-        </div>
-        <div style="text-align:right; flex-shrink:0;">
-          <div style="font-size:13px; font-weight:500; color:var(--text-primary)">${amountStr}</div>
-          <div class="card-meta">${trade.transaction_date}</div>
-          <div class="card-meta" style="font-size:10px;">filed ${trade.disclosed_date}</div>
-        </div>
-      </div>
-      <div class="ai-context" id="ai-${trade.id}" style="
-        font-size:13px; color:var(--text-secondary); line-height:1.6;
-        padding: var(--s3); background: var(--bg-elevated);
-        border-radius: var(--r2); margin-bottom: var(--s3); display:none;">
-      </div>
-      <div class="decision-row">
-        <button class="btn btn-follow"  data-decision="follow"   data-trade-id="${trade.id}">Follow</button>
-        <button class="btn btn-pass"    data-decision="pass"     data-trade-id="${trade.id}">Pass</button>
-        <button class="btn btn-later"   data-decision="not_now"  data-trade-id="${trade.id}">Not Now</button>
-        <button class="btn btn-ghost"   data-decision="explain"  data-trade-id="${trade.id}"
-          style="margin-left:auto; font-size:12px;">Ask AI</button>
-      </div>
-    </div>
-  `
-}
+  container.addEventListener('click', (e) => {
+    // ── Follow button ────────────────────────────────────────────────────────
+    const followBtn = e.target.closest('[data-action="follow"]')
+    if (followBtn) {
+      e.stopPropagation()
+      const tradeId = followBtn.dataset.tradeId
+      const trade   = trades.find(t => t.id === tradeId)
+      if (!trade) return
 
-function _attachDecisionHandlers(container, trades) {
-  const config = getConfig()
+      const alreadyFollowed = cardState.get(tradeId) === 'followed'
+      if (alreadyFollowed) return // idempotent
 
-  container.addEventListener('click', async (e) => {
-    const btn = e.target.closest('[data-decision]')
-    if (!btn) return
+      cardState.set(tradeId, 'followed')
+      console.log('[Feed] follow', trade)
 
-    const decision = btn.dataset.decision
-    const tradeId  = btn.dataset.tradeId
-    const trade    = trades.find(t => t.id === tradeId)
-    if (!trade) return
+      // Update button to checkmark state
+      followBtn.textContent = '✓ Follow'
+      followBtn.style.background  = 'rgba(127,184,131,0.22)'
+      followBtn.style.color       = 'var(--buy)'
+      followBtn.style.borderColor = 'rgba(127,184,131,0.4)'
 
-    if (decision === 'explain') {
-      const aiBox = document.getElementById(`ai-${tradeId}`)
-      if (!aiBox) return
-      aiBox.style.display = 'block'
-      aiBox.textContent = 'Thinking...'
-      try {
-        const { system, prompt } = Prompts.tradeContext({
-          disclosure:    trade,
-          userPositions: getPositions(),
-          watchedPolitician: WATCHLIST.find(p => p.name.toLowerCase() === trade.politician_name.toLowerCase())
-        })
-        const text = await ask(prompt, { system, config })
-        aiBox.textContent = text
-        info(CAT, `AI explain completed for ${tradeId}`)
-      } catch (e) {
-        warn(CAT, 'AI explain failed', e.message)
-        aiBox.textContent = `AI unavailable: ${e.message}`
+      // Add left border accent to card
+      const card = container.querySelector(`.trade-card[data-trade-id="${tradeId}"]`)
+      if (card) {
+        card.style.borderLeftWidth = '3px'
+        card.style.borderLeftColor = 'var(--buy)'
       }
       return
     }
 
-    // Follow / Pass / Not Now → save to Sheets
-    debug(CAT, `Decision: ${decision} on ${tradeId}`)
-    const row = [
-      `dec_${Date.now()}`,
-      tradeId,
-      decision,
-      '',   // invest_amount filled in follow modal
-      '',   // slice_count
-      new Date().toISOString(),
-      '',   // revisit_date
-      ''
-    ]
+    // ── Ignore button ────────────────────────────────────────────────────────
+    const ignoreBtn = e.target.closest('[data-action="ignore"]')
+    if (ignoreBtn) {
+      e.stopPropagation()
+      const tradeId = ignoreBtn.dataset.tradeId
+      const trade   = trades.find(t => t.id === tradeId)
+      if (!trade) return
+      if (cardState.get(tradeId) === 'ignored') return
 
-    if (decision === 'follow') {
-      // Open investment amount modal
-      import('./followModal.js').then(m => m.showFollowModal({ trade, config }))
-    } else {
-      await appendRows('my_decisions', [row])
-      showToast(decision === 'pass' ? 'Passed on this trade' : 'Saved for later')
-      // Dim the card
+      cardState.set(tradeId, 'ignored')
+      console.log('[Feed] ignore', trade)
+
       const card = container.querySelector(`.trade-card[data-trade-id="${tradeId}"]`)
-      if (card) card.style.opacity = '0.4'
+      if (!card) return
+
+      // Animate out
+      card.style.transition = 'opacity 300ms ease, max-height 300ms ease, margin-top 300ms ease, padding 300ms ease'
+      card.style.opacity    = '0'
+      card.style.maxHeight  = card.getBoundingClientRect().height + 'px'
+
+      // Force reflow so transition fires
+      void card.offsetHeight
+
+      requestAnimationFrame(() => {
+        card.style.maxHeight  = '0'
+        card.style.marginTop  = '0'
+        card.style.paddingTop = '0'
+        card.style.paddingBottom = '0'
+        card.style.overflow   = 'hidden'
+      })
+
+      setTimeout(() => card.remove(), 320)
+      return
+    }
+
+    // ── Expand / collapse card body ──────────────────────────────────────────
+    const cardBody = e.target.closest('[data-expand-target]')
+    if (cardBody) {
+      const tradeId    = cardBody.dataset.expandTarget
+      const card       = container.querySelector(`.trade-card[data-trade-id="${tradeId}"]`)
+      const expandedEl = container.querySelector(`[data-expanded-id="${tradeId}"]`)
+      if (!card || !expandedEl) return
+
+      const isExpanded = card.dataset.expanded === 'true'
+      if (isExpanded) {
+        // Collapse
+        expandedEl.style.display   = 'none'
+        card.dataset.expanded      = 'false'
+      } else {
+        // Expand
+        expandedEl.style.display   = 'block'
+        card.dataset.expanded      = 'true'
+      }
+      return
     }
   })
 }
