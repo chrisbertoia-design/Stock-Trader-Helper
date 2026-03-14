@@ -132,7 +132,8 @@ Structured logger in `src/services/logger.js`. Levels: DEBUG, INFO, WARN, ERROR.
 - Default to a working visual over a perfect spec
 
 ## Working Style
-- ALWAYS include `cd /home/user/Stock-Trader-Helper` first in terminal blocks
+- ALWAYS use `cd ~/Stock-Trader-Helper` in terminal blocks (not full /home/user paths)
+- ALWAYS kill the dev port before starting the server: `fuser -k 5175/tcp 2>/dev/null || true && npm run dev`
 - Every URL must be clickable
 - On errors: log to `bad.md`, try one fix, surface to user with context if it fails
 - `CLAUDE.md` updates triggered by user-confirmed success ("that works", "ship it"), not every commit

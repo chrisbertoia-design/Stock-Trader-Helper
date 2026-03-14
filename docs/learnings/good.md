@@ -22,6 +22,11 @@ Single `values:batchUpdate` call for all config writes via `writeConfigBatch()`.
 to check existing headers before writing. Avoids 429 rate limits from sequential per-cell API calls.
 **Reuse**: any multi-key Sheets write — always batch.
 
+## 2026-03-14 | Always kill port 5175 before starting dev server
+Include `fuser -k 5175/tcp 2>/dev/null || true` before `npm run dev` in every terminal block.
+Prevents "port already in use" errors when the user closes a terminal without stopping the server.
+**Reuse**: every single terminal block that starts the dev server.
+
 ## 2026-03-14 | Use ~/repo-name in terminal instructions, not full /home/user/... paths
 Always write terminal blocks as `cd ~/Stock-Trader-Helper` — user closes and reopens terminals between sessions,
 `~` works universally regardless of home directory. Full paths are fragile and harder to read.
