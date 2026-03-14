@@ -311,19 +311,34 @@ async function _ensureDefaultConfig() {
 
 // ─── Raw API calls ────────────────────────────────────────────────────────────
 
-const BASE = 'https://sheets.googleapis.com/v4/spreadsheets'
+const BASE            = 'https://sheets.googleapis.com/v4/spreadsheets'
+const SHEETS_TIMEOUT  = 10_000   // 10s — any hung Sheets call aborts and throws
 
 function _headers() {
   return {
     'Authorization': `Bearer ${_accessToken}`,
-    'Content-Type': 'application/json'
+    'Content-Type':  'application/json'
+  }
+}
+
+/** Fetch wrapper with AbortController timeout — prevents hung requests freezing the UI */
+async function _timedFetch(url, options = {}) {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), SHEETS_TIMEOUT)
+  try {
+    return await fetch(url, { ...options, signal: controller.signal })
+  } catch (e) {
+    if (e.name === 'AbortError') throw new Error(`Sheets request timed out (${SHEETS_TIMEOUT / 1000}s)`)
+    throw e
+  } finally {
+    clearTimeout(timer)
   }
 }
 
 async function _apiGet(path) {
   const url = `${BASE}/${_spreadsheetId}/${path}`
   debug(CAT, `GET ${path}`)
-  const res = await fetch(url, { headers: _headers() })
+  const res = await _timedFetch(url, { headers: _headers() })
   if (!res.ok) {
     const body = await res.text()
     error(CAT, `GET ${path} failed ${res.status}`, body)
@@ -334,7 +349,7 @@ async function _apiGet(path) {
 
 async function _apiGetMeta() {
   const url = `${BASE}/${_spreadsheetId}?fields=sheets.properties.title`
-  const res = await fetch(url, { headers: _headers() })
+  const res = await _timedFetch(url, { headers: _headers() })
   if (!res.ok) throw new Error(`Sheets meta GET: ${res.status}`)
   return res.json()
 }
@@ -342,10 +357,10 @@ async function _apiGetMeta() {
 async function _apiPost(path, body) {
   const url = `${BASE}/${_spreadsheetId}/${path}`
   debug(CAT, `POST ${path}`)
-  const res = await fetch(url, {
-    method: 'POST',
+  const res = await _timedFetch(url, {
+    method:  'POST',
     headers: _headers(),
-    body: JSON.stringify(body)
+    body:    JSON.stringify(body)
   })
   if (!res.ok) {
     const b = await res.text()
@@ -358,10 +373,10 @@ async function _apiPost(path, body) {
 async function _apiPut(path, body) {
   const url = `${BASE}/${_spreadsheetId}/${path}`
   debug(CAT, `PUT ${path}`)
-  const res = await fetch(url, {
-    method: 'PUT',
+  const res = await _timedFetch(url, {
+    method:  'PUT',
     headers: _headers(),
-    body: JSON.stringify(body)
+    body:    JSON.stringify(body)
   })
   if (!res.ok) {
     const b = await res.text()
