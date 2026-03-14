@@ -10,6 +10,7 @@ export default defineConfig({
       '/api/hsw': {
         target: 'https://house-stock-watcher-data.s3-us-east-2.amazonaws.com',
         changeOrigin: true,
+        followRedirects: true,
         rewrite: (path) => path.replace(/^\/api\/hsw/, '/data')
       }
     }
