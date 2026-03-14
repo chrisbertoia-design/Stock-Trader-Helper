@@ -195,6 +195,44 @@ export async function writeConfigKey(key, value) {
   info(CAT, `Config key updated: ${key} = ${value}`)
 }
 
+/**
+ * Write multiple config key/value pairs in a single values:batchUpdate call.
+ * Reads the config tab once, maps keys to row positions, then writes all
+ * in one API round-trip. New keys not found in the tab are appended.
+ * @param {Object} updates - { key: value, ... }
+ */
+export async function writeConfigBatch(updates) {
+  if (!Object.keys(updates).length) return
+  debug(CAT, `writeConfigBatch — ${Object.keys(updates).length} keys`)
+
+  const rows = await readTab('config')
+  const ts   = new Date().toISOString()
+  const data = []       // existing rows to update via batchUpdate
+  const newRows = []    // keys not yet in the tab — will be appended
+
+  for (const [key, value] of Object.entries(updates)) {
+    const idx = rows.findIndex(r => r[0] === key)
+    if (idx === -1) {
+      newRows.push([key, String(value), '', ts])
+    } else {
+      const sheetRow = idx + 2   // 1-indexed + header row
+      data.push({ range: `config!B${sheetRow}`, majorDimension: 'ROWS', values: [[String(value)]] })
+      data.push({ range: `config!D${sheetRow}`, majorDimension: 'ROWS', values: [[ts]] })
+    }
+  }
+
+  if (data.length > 0) {
+    await _withRetry(() =>
+      _apiPost(`values:batchUpdate`, { valueInputOption: 'USER_ENTERED', data })
+    )
+  }
+  if (newRows.length > 0) {
+    await appendRows('config', newRows)
+  }
+
+  info(CAT, `writeConfigBatch complete — ${data.length / 2} updated, ${newRows.length} appended`)
+}
+
 // ─── Generic tab operations ───────────────────────────────────────────────────
 
 export async function readTab(tabName, range = null) {
@@ -219,9 +257,11 @@ export async function appendRows(tabName, rows) {
 
 export async function updateCell(a1, value) {
   debug(CAT, `updateCell ${a1} = ${value}`)
-  await _apiPut(
-    `values/${encodeURIComponent(a1)}?valueInputOption=USER_ENTERED`,
-    { values: [[value]] }
+  await _withRetry(() =>
+    _apiPut(
+      `values/${encodeURIComponent(a1)}?valueInputOption=USER_ENTERED`,
+      { values: [[value]] }
+    )
   )
 }
 

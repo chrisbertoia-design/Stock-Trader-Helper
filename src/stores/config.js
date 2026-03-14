@@ -4,8 +4,8 @@
  * Can be refreshed at runtime; changes persist back to Sheets.
  */
 
-import { readConfig, writeConfigKey } from '../api/googleSheets.js'
-import { debug, info }                from '../services/logger.js'
+import { readConfig, writeConfigKey, writeConfigBatch } from '../api/googleSheets.js'
+import { debug, info }                                   from '../services/logger.js'
 
 const CAT = 'CONFIG'
 
@@ -40,11 +40,17 @@ export function getEditableConfig() {
 }
 
 export async function saveEditableConfig(updates) {
-  const keys = Object.keys(updates)
-  info(CAT, `saveEditableConfig — updating ${keys.length} keys`)
-  for (const key of keys) {
-    if (updates[key] !== _config[key]) {
-      await set(key, updates[key])
+  const changed = {}
+  for (const [key, value] of Object.entries(updates)) {
+    if (String(value) !== String(_config[key])) {
+      _config[key] = value
+      changed[key] = value
     }
   }
+  if (!Object.keys(changed).length) {
+    debug(CAT, 'saveEditableConfig — no changes detected')
+    return
+  }
+  info(CAT, `saveEditableConfig — saving ${Object.keys(changed).length} changed keys in one batch call`)
+  await writeConfigBatch(changed)
 }
