@@ -1,12 +1,14 @@
 /**
- * App shell renderer.
- * Three views: Feed | Positions | Settings
+ * App shell renderer — home-first drill-down navigation.
+ * Exposes window._navigate(viewName, params={}) globally.
  */
 
-import { info }                        from '../services/logger.js'
-import { renderFeed }                  from './views/feed.js'
-import { renderPositions }             from './views/positions.js'
-import { renderSettings }              from './views/settings.js'
+import { info }             from '../services/logger.js'
+import { renderHome }       from './views/home.js'
+import { renderFeed }       from './views/feed.js'
+import { renderPositions }  from './views/positions.js'
+import { renderSettings }   from './views/settings.js'
+import { renderWhatToBuy }  from './views/whatToBuy.js'
 
 const CAT = 'APP_SHELL'
 
@@ -15,14 +17,15 @@ export function renderApp({ spreadsheetId }) {
 
   document.getElementById('app').innerHTML = `
     <div class="app-shell">
-      <header class="app-header">
-        <span class="app-wordmark">STH</span>
-        <nav class="app-nav">
-          <button class="nav-btn active" data-view="feed">Feed</button>
-          <button class="nav-btn" data-view="positions">Positions</button>
-          <button class="nav-btn" data-view="settings">Settings</button>
-        </nav>
-        <div id="sync-status" class="sync-dot"></div>
+      <header class="app-header" id="app-header">
+        <div class="header-left">
+          <button class="back-btn hidden" id="back-btn" aria-label="Back">←</button>
+          <span class="app-wordmark">STH</span>
+        </div>
+        <div class="header-right">
+          <div id="sync-status" class="sync-dot"></div>
+          <button class="settings-btn btn btn-ghost" id="settings-btn" aria-label="Settings">⚙</button>
+        </div>
       </header>
       <main class="app-content" id="view-content">
         <div class="empty-state">
@@ -33,23 +36,43 @@ export function renderApp({ spreadsheetId }) {
     <div id="toast-container"></div>
   `
 
-  // Navigation
-  const navBtns   = document.querySelectorAll('.nav-btn')
   const viewContent = document.getElementById('view-content')
-  let   activeView = null   // null so first switchView('feed') is never skipped
+  const backBtn     = document.getElementById('back-btn')
+  const settingsBtn = document.getElementById('settings-btn')
+  let   activeView  = null
 
-  async function switchView(view) {
-    if (view === activeView && viewContent.children.length > 0) return
-    activeView = view
+  function navigate(viewName, params = {}) {
+    if (viewName === activeView && viewContent.children.length > 0) return
+    activeView = viewName
 
-    navBtns.forEach(b => b.classList.toggle('active', b.dataset.view === view))
+    info(CAT, `Navigate to: ${viewName}`)
+
+    // Show/hide back button
+    if (viewName === 'home') {
+      backBtn.classList.add('hidden')
+    } else {
+      backBtn.classList.remove('hidden')
+    }
+
+    // Hide settings gear when already on settings
+    settingsBtn.classList.toggle('hidden', viewName === 'settings')
+
     viewContent.innerHTML = `<div class="empty-state"><div class="loading-sub">Loading...</div></div>`
 
-    info(CAT, `Switch to view: ${view}`)
     try {
-      if      (view === 'feed')      await renderFeed(viewContent)
-      else if (view === 'positions') await renderPositions(viewContent)
-      else if (view === 'settings')  await renderSettings(viewContent)
+      const ctx = { navigate }
+      if      (viewName === 'home')       renderHome(viewContent, ctx)
+      else if (viewName === 'feed')       renderFeed(viewContent, ctx)
+      else if (viewName === 'positions')  renderPositions(viewContent, ctx)
+      else if (viewName === 'settings')   renderSettings(viewContent, ctx)
+      else if (viewName === 'whatToBuy')  renderWhatToBuy(viewContent, ctx)
+      else {
+        viewContent.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-state-title">Unknown view</div>
+            <div class="empty-state-sub">"${viewName}" is not registered.</div>
+          </div>`
+      }
     } catch (e) {
       viewContent.innerHTML = `
         <div class="empty-state">
@@ -59,9 +82,11 @@ export function renderApp({ spreadsheetId }) {
     }
   }
 
-  navBtns.forEach(btn => {
-    btn.addEventListener('click', () => switchView(btn.dataset.view))
-  })
+  // Expose globally so any view can call window._navigate(...)
+  window._navigate = navigate
 
-  switchView('feed')
+  backBtn.addEventListener('click', () => navigate('home'))
+  settingsBtn.addEventListener('click', () => navigate('settings'))
+
+  navigate('home')
 }
