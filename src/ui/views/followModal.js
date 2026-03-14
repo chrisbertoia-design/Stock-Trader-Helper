@@ -7,7 +7,7 @@
 import { ask, Prompts }     from '../../api/ai/index.js'
 import { appendRows }       from '../../api/googleSheets.js'
 import { getConfig }        from '../../stores/config.js'
-import { MOCK_POSITIONS }   from '../../data/mockPositions.js'
+import { getPositions, loadPositions, isLoaded } from '../../stores/positions.js'
 import { getSP500Tickers }  from '../../services/sp500.js'
 import { info, debug }      from '../../services/logger.js'
 import { showToast }        from '../components/toast.js'
@@ -109,6 +109,10 @@ export async function showFollowModal({ trade, config }) {
       return
     }
 
+    if (!isLoaded()) {
+      try { await loadPositions() } catch (e) { debug(CAT, 'Positions load skipped', e.message) }
+    }
+
     const confirmBtn = document.getElementById('confirm-follow')
     confirmBtn.textContent = 'Building allocation...'
     confirmBtn.disabled = true
@@ -117,7 +121,7 @@ export async function showFollowModal({ trade, config }) {
 
     try {
       const sp500 = await getSP500Tickers()
-      const tickers = [trade.ticker, ...Object.keys(MOCK_POSITIONS)
+      const tickers = [trade.ticker, ...Object.keys(getPositions())
         .filter(t => sp500.has(t) && t !== trade.ticker)
         .slice(0, sliceCount - 1)]
 
@@ -128,7 +132,7 @@ export async function showFollowModal({ trade, config }) {
       let allocationResult
       try {
         const { system, prompt } = Prompts.sliceAllocation({
-          totalAmount: amount, tickers, userPositions: MOCK_POSITIONS, signalStrengths
+          totalAmount: amount, tickers, userPositions: getPositions(), signalStrengths
         })
         const raw = await ask(prompt, { system, config })
         const jsonMatch = raw.match(/\[[\s\S]*\]/)
@@ -150,7 +154,7 @@ export async function showFollowModal({ trade, config }) {
       confirmBtn.disabled = false
 
       confirmBtn.onclick = async () => {
-        await _saveDecision(trade, amount, allocation)
+        await _saveDecision(trade, amount, allocation, sp500)
         showToast('Decision saved')
         overlay.remove()
       }
@@ -189,7 +193,7 @@ function _renderAllocationPreview(overlay, allocation, total, sp500) {
   `
 }
 
-async function _saveDecision(trade, amount, allocation) {
+async function _saveDecision(trade, amount, allocation, sp500) {
   const decId = `dec_${Date.now()}`
   info(CAT, `Saving decision ${decId}`, { ticker: trade.ticker, amount, slices: allocation.length })
 
@@ -200,6 +204,6 @@ async function _saveDecision(trade, amount, allocation) {
 
   await appendRows('my_allocations', allocation.map(a => [
     `alloc_${Date.now()}_${a.ticker}`, decId,
-    a.ticker, a.amount, 'Y', 'N', '', ''
+    a.ticker, a.amount, sp500?.has(a.ticker) ? 'Y' : 'N', 'N', '', ''
   ]))
 }

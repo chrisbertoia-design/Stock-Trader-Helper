@@ -15,7 +15,7 @@ import { getConfig }                   from '../../stores/config.js'
 import { debug, info, warn }           from '../../services/logger.js'
 import { showToast }                   from '../components/toast.js'
 import { WATCHLIST }                   from '../../data/watchlist.js'
-import { MOCK_POSITIONS }              from '../../data/mockPositions.js'
+import { getPositions, loadPositions, isLoaded } from '../../stores/positions.js'
 
 const CAT = 'FEED'
 
@@ -25,6 +25,10 @@ const PARTY_ROSTER = { D: 213, R: 220 }
 export async function renderFeed(container) {
   info(CAT, 'renderFeed()')
   container.innerHTML = `<div class="feed-loading empty-state"><div class="loading-sub">Fetching trades...</div></div>`
+
+  if (!isLoaded()) {
+    try { await loadPositions() } catch (e) { warn(CAT, 'Positions load failed', e.message) }
+  }
 
   let transactions
   try {
@@ -168,7 +172,7 @@ function _attachDecisionHandlers(container, trades) {
       try {
         const { system, prompt } = Prompts.tradeContext({
           disclosure:    trade,
-          userPositions: MOCK_POSITIONS,
+          userPositions: getPositions(),
           watchedPolitician: WATCHLIST.find(p => p.name.toLowerCase() === trade.politician_name.toLowerCase())
         })
         const text = await ask(prompt, { system, config })
