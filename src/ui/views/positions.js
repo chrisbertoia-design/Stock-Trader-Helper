@@ -6,61 +6,36 @@
 
 import { parseTransactionsCsv, derivePositions, parsePositionsCsv }
   from '../../services/schwabParser.js'
-import { readTab, appendRows, getSpreadsheetId } from '../../api/googleSheets.js'
+import { appendRows, getSpreadsheetId, clearTab } from '../../api/googleSheets.js'
 import { info, warn }             from '../../services/logger.js'
 import { showToast }              from '../components/toast.js'
-import { MOCK_POSITIONS, MOCK_LAST_UPDATE, MOCK_ACCOUNT, ACCOUNT_SUMMARY } from '../../data/mockPositions.js'
+import { getPositions, setPositions, loadPositions, isLoaded, getPositionsSummary }
+  from '../../stores/positions.js'
 
 const CAT = 'POSITIONS_VIEW'
 
 export async function renderPositions(container) {
   info(CAT, 'renderPositions()')
 
-  // Try loading from Sheets first
-  let positions = {}
-  let lastUpdate = null
-  let account    = null
-  let fromSheets = false
-
-  try {
-    if (!getSpreadsheetId()) throw new Error('Sheets not ready')
-    const rows = await readTab('my_positions')
-    if (rows.length > 0) {
-      fromSheets = true
-      for (const row of rows) {
-        const ticker = row[0]
-        if (!ticker) continue
-        positions[ticker] = {
-          ticker,
-          quantity:       parseFloat(row[1]) || 0,
-          avg_cost:       parseFloat(row[2]) || 0,
-          mkt_value:      parseFloat(row[3]) || 0,
-          gain_loss:      parseFloat(row[4]) || 0,
-          gain_loss_pct:  parseFloat(row[5]) || 0,
-          last_csv_upload: row[6] || '',
-          source:          row[7] || 'schwab_csv'
-        }
-      }
-      lastUpdate = Object.values(positions)[0]?.last_csv_upload || null
-      info(CAT, `Loaded ${Object.keys(positions).length} positions from Sheets`)
+  // Load positions if not already loaded
+  if (!isLoaded()) {
+    try {
+      await loadPositions()
+    } catch (e) {
+      warn(CAT, 'loadPositions failed', e.message)
     }
-  } catch (e) {
-    warn(CAT, 'Could not load positions from Sheets', e.message)
   }
 
-  // Fall back to mock data
-  if (!fromSheets || Object.keys(positions).length === 0) {
-    positions  = MOCK_POSITIONS
-    lastUpdate = MOCK_LAST_UPDATE
-    account    = MOCK_ACCOUNT
-    info(CAT, 'Using mock positions data')
-  }
+  // Get positions from store
+  const positions = getPositions()
+  const summary = getPositionsSummary()
+  const usingMock = !isLoaded() || Object.keys(positions).length === 0
+
+  const lastUpdate = Object.values(positions)[0]?.last_csv_upload || null
 
   const sortedTickers = Object.keys(positions).sort((a, b) => {
     return (positions[b].mkt_val || positions[b].mkt_value || 0) - (positions[a].mkt_val || positions[a].mkt_value || 0)
   })
-
-  const totalValue = sortedTickers.reduce((sum, t) => sum + (positions[t].mkt_val || positions[t].mkt_value || 0), 0)
 
   container.innerHTML = `
     <div class="positions-header" style="margin-bottom:var(--s5);">
@@ -68,10 +43,10 @@ export async function renderPositions(container) {
         <div>
           <h2 style="font-size:15px; font-weight:500; margin-bottom:var(--s1);">My Positions</h2>
           <div style="font-size:12px; color:var(--text-tertiary);">
-            ${account || 'Schwab Account'} ·
+            Schwab Account ·
             ${lastUpdate ? `updated ${lastUpdate}` : 'no data yet'}
           </div>
-          ${!fromSheets ? `<div style="font-size:11px; color:var(--accent); margin-top:4px;">Using sample data — upload CSV to see real positions</div>` : ''}
+          ${usingMock || Object.keys(positions).length === 0 ? `<div style="font-size:11px; color:var(--accent); margin-top:4px;">Using sample data — upload CSV to see real positions</div>` : ''}
         </div>
         <label class="btn btn-ghost" style="cursor:pointer; font-size:12px;">
           Upload CSV
@@ -81,21 +56,21 @@ export async function renderPositions(container) {
 
       <div class="stat-row">
         <div class="stat">
-          <span class="stat-value">$${(ACCOUNT_SUMMARY?.account_total || totalValue).toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2})}</span>
+          <span class="stat-value">$${(summary?.account_total || 0).toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2})}</span>
           <span class="stat-label">Account Total</span>
         </div>
         <div class="stat">
-          <span class="stat-value" style="color:${(ACCOUNT_SUMMARY?.total_gl_pct||0) >= 0 ? 'var(--buy)' : 'var(--sell)'}">
-            ${(ACCOUNT_SUMMARY?.total_gl_pct||0) >= 0 ? '+' : ''}${(ACCOUNT_SUMMARY?.total_gl_pct||0).toFixed(2)}%
+          <span class="stat-value" style="color:${(summary?.total_gl_pct||0) >= 0 ? 'var(--buy)' : 'var(--sell)'}">
+            ${(summary?.total_gl_pct||0) >= 0 ? '+' : ''}${(summary?.total_gl_pct||0).toFixed(2)}%
           </span>
           <span class="stat-label">Total G/L</span>
         </div>
         <div class="stat">
-          <span class="stat-value">${sortedTickers.length}</span>
+          <span class="stat-value">${summary?.position_count || sortedTickers.length}</span>
           <span class="stat-label">Positions</span>
         </div>
         <div class="stat">
-          <span class="stat-value">$${(ACCOUNT_SUMMARY?.cash||0).toFixed(2)}</span>
+          <span class="stat-value">$${(summary?.cash||0).toFixed(2)}</span>
           <span class="stat-label">Cash</span>
         </div>
       </div>
@@ -156,12 +131,22 @@ async function _handleCsvUpload(file, container) {
       info(CAT, `Parsed positions export: ${Object.keys(positions).length} positions`)
     }
 
+    // Replace not append — clear existing data rows first
+    try {
+      await clearTab('my_positions')
+    } catch (e) {
+      warn(CAT, 'clearTab failed', e.message)
+    }
+
     // Write to Sheets my_positions tab
     const rows = Object.values(positions).map(p => [
       p.ticker, p.quantity, p.avg_cost, p.mkt_value,
       p.gain_loss, p.gain_loss_pct, p.last_csv_upload, p.source
     ])
     await appendRows('my_positions', rows)
+
+    // Update store immediately after successful upload
+    setPositions(positions)
 
     showToast(`Imported ${rows.length} positions from ${file.name}`)
     await renderPositions(container)

@@ -62,6 +62,16 @@ async function _connectSheets(spreadsheetId, accessToken) {
     })
 
     await loadConfig()
+
+    // Pre-load positions into the store so Feed and Follow modal have real data
+    try {
+      const { loadPositions } = await import('./stores/positions.js')
+      await loadPositions()
+      info('BOOT', 'Positions loaded')
+    } catch (e) {
+      warn('BOOT', `Positions load failed (will use mock): ${e.message}`)
+    }
+
     info('BOOT', 'Sheets connected + config loaded')
   } catch (err) {
     warn('BOOT', `Sheets unavailable (app continues with defaults): ${err.message}`)
