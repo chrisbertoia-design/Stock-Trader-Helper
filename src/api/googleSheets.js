@@ -145,18 +145,13 @@ export async function initSheets(spreadsheetId, accessToken) {
   _accessToken   = accessToken
 
   // Tab provisioning is maintenance-only — non-fatal.
-  // If quota is exhausted (429) or network is slow, the app still loads.
-  // Tabs are already created after first boot; we just skip header re-writes.
-  try {
-    await _ensureAllTabs()
-  } catch (e) {
-    warn(CAT, `_ensureAllTabs failed (non-fatal): ${e.message}`)
-  }
-  try {
-    await _ensureDefaultConfig()
-  } catch (e) {
-    warn(CAT, `_ensureDefaultConfig failed (non-fatal): ${e.message}`)
-  }
+  // Run in parallel to cut boot time from 4-6 serial API calls to 2-3.
+  const [tabsResult, configResult] = await Promise.allSettled([
+    _ensureAllTabs(),
+    _ensureDefaultConfig(),
+  ])
+  if (tabsResult.status   === 'rejected') warn(CAT, `_ensureAllTabs failed (non-fatal): ${tabsResult.reason?.message}`)
+  if (configResult.status === 'rejected') warn(CAT, `_ensureDefaultConfig failed (non-fatal): ${configResult.reason?.message}`)
 
   info(CAT, 'Google Sheets initialized', { spreadsheetId })
 }
@@ -180,18 +175,8 @@ export async function readConfig() {
 
 export async function writeConfigKey(key, value) {
   debug(CAT, 'writeConfigKey', { key, value })
-  const rows = await readTab('config')
-  const idx  = rows.findIndex(r => r[0] === key)
-  const ts   = new Date().toISOString()
-
-  if (idx === -1) {
-    warn(CAT, `writeConfigKey — key not found, appending: ${key}`)
-    await appendRows('config', [[key, value, '', ts]])
-  } else {
-    const sheetRow = idx + 2 // 1-indexed + header row
-    await updateCell(`config!B${sheetRow}`, value)
-    await updateCell(`config!D${sheetRow}`, ts)
-  }
+  // Delegate to writeConfigBatch — reads once, writes both cells in one API call
+  await writeConfigBatch({ [key]: value })
   info(CAT, `Config key updated: ${key} = ${value}`)
 }
 
@@ -441,7 +426,7 @@ async function _apiPut(path, body) {
 
 /** Retry wrapper for 429 rate-limit errors — exponential backoff */
 async function _withRetry(fn, maxAttempts = 5) {
-  let delay = 2000
+  let delay = 500
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
       return await fn()
@@ -458,7 +443,7 @@ async function _withRetry(fn, maxAttempts = 5) {
 async function _apiBatchUpdate(body) {
   const url = `${BASE}/${_spreadsheetId}:batchUpdate`
   debug(CAT, 'batchUpdate', body)
-  const res = await fetch(url, {
+  const res = await _timedFetch(url, {
     method: 'POST',
     headers: _headers(),
     body: JSON.stringify(body)

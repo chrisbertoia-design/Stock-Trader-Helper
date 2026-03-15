@@ -9,15 +9,21 @@ import { debug, info }                                   from '../services/logge
 
 const CAT = 'CONFIG'
 
-let _config = {}
-let _loaded = false
+let _config     = {}
+let _loaded     = false
+let _loadInFlight = null
 
 export async function loadConfig() {
+  if (_loadInFlight) return _loadInFlight
   debug(CAT, 'loadConfig()')
-  _config = await readConfig()
-  _loaded = true
-  info(CAT, `Config loaded — ${Object.keys(_config).length} keys`)
-  return _config
+  _loadInFlight = readConfig().then(cfg => {
+    _config = cfg
+    _loaded = true
+    _loadInFlight = null
+    info(CAT, `Config loaded — ${Object.keys(_config).length} keys`)
+    return _config
+  })
+  return _loadInFlight
 }
 
 export function getConfig() {
