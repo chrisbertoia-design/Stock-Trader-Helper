@@ -4,10 +4,19 @@
 
 import { test, expect } from '@playwright/test'
 import { setupAuth, goHome } from './helpers/auth.js'
+import { checkPositionsDataSource } from './helpers/dataCheck.js'
 
 test.beforeEach(async ({ page }) => {
   await setupAuth(page)
   await goHome(page)
+})
+
+// ─── Data source observability ────────────────────────────────────────────────
+
+test('[DATA SOURCE] positions using real Sheets data vs mock fallback', async ({ page }, testInfo) => {
+  await page.locator('.home-card').nth(2).click()
+  await page.locator('h2', { hasText: 'My Positions' }).waitFor({ timeout: 8000 })
+  await checkPositionsDataSource(page, testInfo)
 })
 
 // ─── Render ───────────────────────────────────────────────────────────────────

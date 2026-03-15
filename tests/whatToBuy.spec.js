@@ -4,12 +4,19 @@
 
 import { test, expect } from '@playwright/test'
 import { setupAuth, goHome } from './helpers/auth.js'
+import { checkWhatToBuyDataSource } from './helpers/dataCheck.js'
 
 test.beforeEach(async ({ page }) => {
   await setupAuth(page)
   await goHome(page)
   await page.locator('.home-card').nth(3).click()
   await page.locator('#amount-input').waitFor({ timeout: 5000 })
+})
+
+// ─── Data source observability ────────────────────────────────────────────────
+
+test('[DATA SOURCE] what to buy data source phase status', async ({ page }, testInfo) => {
+  await checkWhatToBuyDataSource(page, testInfo)
 })
 
 // ─── Step 1: Amount input ─────────────────────────────────────────────────────

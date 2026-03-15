@@ -34,6 +34,15 @@ Each call fired an independent `readTab('my_positions')` with a 10s AbortControl
 tab-clicking, promises piled up and exhausted browser resources, crashing the tab.
 **Fix**: `_loadInFlight` dedup promise — concurrent callers share one Sheets request.
 
+## 2026-03-15 | HSW S3 URL used wrong AWS region (us-east-2 → 403 in production)
+The production HSW fetch URL hardcoded `s3-us-east-2.amazonaws.com`. The bucket lives in `us-west-2`.
+Result: every `fetchAllTransactions()` call in production received HTTP 403, the catch block fired,
+`usingMock = true`, and users saw 5 hardcoded mock trades with an orange banner — silently, no console error visible to the user.
+Tests never caught this because Playwright's `route.abort()` intercept blocked the request before it hit the network,
+causing an `AbortError` that also triggers the mock fallback. The mock path is indistinguishable in test output.
+**Fix**: change URL to `https://house-stock-watcher-data.s3-us-west-2.amazonaws.com/data/all_transactions.json`.
+**Prevention**: add a `[DATA SOURCE]` observability test to each spec that checks for mock-data banners and annotates the report.
+
 ## 2026-03-14 | Direct S3 fetch from localhost (CORS)
 `fetch('https://house-stock-watcher-data.s3-us-east-2.amazonaws.com/...')` from `localhost:5175` triggers
 CORS preflight rejection. Browser throws "Failed to fetch" before any data arrives.

@@ -164,7 +164,7 @@ function _renderSkeleton() {
 
 // ─── Main render ─────────────────────────────────────────────────────────────
 
-export async function renderFeed(container, signal) {
+export async function renderFeed(container, signal, { forceRefresh = false } = {}) {
   // Show skeleton immediately
   container.innerHTML = _renderSkeleton()
 
@@ -172,8 +172,8 @@ export async function renderFeed(container, signal) {
   let usingMock = false
 
   try {
-    debug(CAT, 'Fetching HSW transactions')
-    const allTransactions = await fetchAllTransactions()
+    debug(CAT, `Fetching HSW transactions (forceRefresh=${forceRefresh})`)
+    const allTransactions = await fetchAllTransactions({ forceRefresh })
     debug(CAT, `HSW returned ${allTransactions.length} transactions`)
 
     // Load active watchlist names — Sheets first, seed fallback
@@ -218,10 +218,15 @@ export async function renderFeed(container, signal) {
     ? 'Sample data — connect Google to load live trades'
     : `${tradeCount} disclosure${tradeCount !== 1 ? 's' : ''} · last 30 days`
 
+  const refreshBtn = `<button id="feed-refresh-btn" class="btn btn-ghost" style="font-size:11px;padding:2px 10px;margin-top:var(--s2);">↺ Refresh</button>`
+
   if (visibleTrades.length === 0) {
     container.innerHTML = `
       <div style="margin-bottom:var(--s5);">
-        <div style="font-size:18px;font-weight:600;color:var(--text-primary);letter-spacing:-0.01em;">Recent Trades</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;">
+          <div style="font-size:18px;font-weight:600;color:var(--text-primary);letter-spacing:-0.01em;">Recent Trades</div>
+          ${refreshBtn}
+        </div>
         <div style="font-size:12px;color:var(--text-secondary);margin-top:var(--s1);">${subtitle}</div>
       </div>
       <div style="padding:var(--s6) var(--s4);text-align:center;color:var(--text-tertiary);font-size:13px;line-height:1.6;">
@@ -229,12 +234,16 @@ export async function renderFeed(container, signal) {
         <span style="font-size:12px;">All trades may have been dismissed, or your watchlist may be empty.</span>
       </div>
     `
+    _attachRefreshHandler(container, signal)
     return
   }
 
   container.innerHTML = `
     <div style="margin-bottom:var(--s5);">
-      <div style="font-size:18px;font-weight:600;color:var(--text-primary);letter-spacing:-0.01em;">Recent Trades</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;">
+        <div style="font-size:18px;font-weight:600;color:var(--text-primary);letter-spacing:-0.01em;">Recent Trades</div>
+        ${refreshBtn}
+      </div>
       <div style="font-size:12px;color:var(--text-secondary);margin-top:var(--s1);">${subtitle}</div>
       ${usingMock ? `<div style="font-size:11px;color:var(--accent);margin-top:4px;">Using sample data — upload positions or connect Google to see live trades</div>` : ''}
     </div>
@@ -249,6 +258,17 @@ export async function renderFeed(container, signal) {
   })
 
   _attachHandlers(container, visibleTrades, decisions, signal)
+  _attachRefreshHandler(container, signal)
+}
+
+function _attachRefreshHandler(container, signal) {
+  const btn = container.querySelector('#feed-refresh-btn')
+  if (!btn) return
+  btn.addEventListener('click', () => {
+    btn.textContent = '↺ Refreshing…'
+    btn.disabled = true
+    renderFeed(container, signal, { forceRefresh: true })
+  }, signal ? { signal } : {})
 }
 
 function _applyFollowedUI(container, tradeId) {

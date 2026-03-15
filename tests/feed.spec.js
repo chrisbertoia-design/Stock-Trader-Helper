@@ -4,6 +4,7 @@
 
 import { test, expect } from '@playwright/test'
 import { setupAuth, goHome } from './helpers/auth.js'
+import { checkFeedDataSource } from './helpers/dataCheck.js'
 
 test.beforeEach(async ({ page }) => {
   await setupAuth(page)
@@ -12,6 +13,13 @@ test.beforeEach(async ({ page }) => {
   await page.evaluate(() => localStorage.removeItem('sth_trade_decisions'))
   await page.locator('.home-card').first().click()
   await page.locator('#feed-cards').waitFor({ timeout: 5000 })
+})
+
+// ─── Data source observability ────────────────────────────────────────────────
+
+test('[DATA SOURCE] feed using real HSW data vs mock fallback', async ({ page }, testInfo) => {
+  // Always passes. Annotates WARNING in the report if live API data is absent.
+  await checkFeedDataSource(page, testInfo)
 })
 
 // ─── Render ───────────────────────────────────────────────────────────────────

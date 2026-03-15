@@ -4,12 +4,19 @@
 
 import { test, expect } from '@playwright/test'
 import { setupAuth, goHome } from './helpers/auth.js'
+import { checkTopSignalDataSource } from './helpers/dataCheck.js'
 
 test.beforeEach(async ({ page }) => {
   await setupAuth(page)
   await goHome(page)
   await page.locator('.home-card').nth(1).click()
   await page.locator('#party-filters').waitFor({ timeout: 5000 })
+})
+
+// ─── Data source observability ────────────────────────────────────────────────
+
+test('[DATA SOURCE] top signal data source phase status', async ({ page }, testInfo) => {
+  await checkTopSignalDataSource(page, testInfo)
 })
 
 // ─── Render ───────────────────────────────────────────────────────────────────
