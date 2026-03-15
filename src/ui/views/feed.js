@@ -118,20 +118,38 @@ function _tradeCardHTML(trade) {
 `
 }
 
+// ─── Persistence helpers ─────────────────────────────────────────────────────
+
+const STORAGE_KEY = 'sth_trade_decisions'
+
+function _loadDecisions() {
+  try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}') } catch { return {} }
+}
+
+function _saveDecision(tradeId, decision) {
+  const decisions = _loadDecisions()
+  decisions[tradeId] = decision
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(decisions))
+}
+
 // ─── Main render ─────────────────────────────────────────────────────────────
 
 export function renderFeed(container) {
-  const trades = MOCK_TRADES
+  const trades    = MOCK_TRADES
+  const decisions = _loadDecisions()
+
+  // Filter out already-ignored trades
+  const visibleTrades = trades.filter(t => decisions[t.id] !== 'ignored')
 
   // Page header
   const headerHTML = `
 <div style="margin-bottom:var(--s5);">
   <div style="font-size:18px;font-weight:600;color:var(--text-primary);letter-spacing:-0.01em;">Recent Trades</div>
-  <div style="font-size:12px;color:var(--text-secondary);margin-top:var(--s1);">${trades.length} trades &nbsp;·&nbsp; last 90 days</div>
+  <div style="font-size:12px;color:var(--text-secondary);margin-top:var(--s1);">${visibleTrades.length} trades &nbsp;·&nbsp; last 90 days</div>
 </div>
 `
 
-  if (trades.length === 0) {
+  if (visibleTrades.length === 0) {
     container.innerHTML = headerHTML + `
 <div class="empty-state">
   <div class="empty-state-title">No trades to show</div>
@@ -140,16 +158,38 @@ export function renderFeed(container) {
     return
   }
 
-  container.innerHTML = headerHTML + `<div id="feed-cards">${trades.map(_tradeCardHTML).join('')}</div>`
+  container.innerHTML = headerHTML + `<div id="feed-cards">${visibleTrades.map(_tradeCardHTML).join('')}</div>`
 
-  _attachHandlers(container, trades)
+  // Restore followed state for any previously followed trades
+  visibleTrades.forEach(trade => {
+    if (decisions[trade.id] === 'followed') {
+      _applyFollowedUI(container, trade.id)
+    }
+  })
+
+  _attachHandlers(container, visibleTrades, decisions)
+}
+
+function _applyFollowedUI(container, tradeId) {
+  const btn = container.querySelector(`.trade-follow-btn[data-trade-id="${tradeId}"]`)
+  if (btn) {
+    btn.textContent = '✓ Follow'
+    btn.style.background  = 'rgba(127,184,131,0.22)'
+    btn.style.color       = 'var(--buy)'
+    btn.style.borderColor = 'rgba(127,184,131,0.4)'
+  }
+  const card = container.querySelector(`.trade-card[data-trade-id="${tradeId}"]`)
+  if (card) {
+    card.style.borderLeftWidth = '3px'
+    card.style.borderLeftColor = 'var(--buy)'
+  }
 }
 
 // ─── Interaction logic ────────────────────────────────────────────────────────
 
-function _attachHandlers(container, trades) {
-  // In-memory state: Map<tradeId, 'followed' | 'ignored'>
-  const cardState = new Map()
+function _attachHandlers(container, trades, decisions) {
+  // Mirror localStorage into a live Map for this session
+  const cardState = new Map(Object.entries(decisions))
 
   container.addEventListener('click', (e) => {
     // ── Follow button ────────────────────────────────────────────────────────
@@ -164,20 +204,9 @@ function _attachHandlers(container, trades) {
       if (alreadyFollowed) return // idempotent
 
       cardState.set(tradeId, 'followed')
-      console.log('[Feed] follow', trade)
+      _saveDecision(tradeId, 'followed')
 
-      // Update button to checkmark state
-      followBtn.textContent = '✓ Follow'
-      followBtn.style.background  = 'rgba(127,184,131,0.22)'
-      followBtn.style.color       = 'var(--buy)'
-      followBtn.style.borderColor = 'rgba(127,184,131,0.4)'
-
-      // Add left border accent to card
-      const card = container.querySelector(`.trade-card[data-trade-id="${tradeId}"]`)
-      if (card) {
-        card.style.borderLeftWidth = '3px'
-        card.style.borderLeftColor = 'var(--buy)'
-      }
+      _applyFollowedUI(container, tradeId)
       return
     }
 
@@ -191,7 +220,7 @@ function _attachHandlers(container, trades) {
       if (cardState.get(tradeId) === 'ignored') return
 
       cardState.set(tradeId, 'ignored')
-      console.log('[Feed] ignore', trade)
+      _saveDecision(tradeId, 'ignored')
 
       const card = container.querySelector(`.trade-card[data-trade-id="${tradeId}"]`)
       if (!card) return

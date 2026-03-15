@@ -1,7 +1,7 @@
 /**
  * What to Buy screen — investment slice recommendations.
  * Step 1: Dollar amount input with quick-select pills
- * Step 2: Ranked slice picks with rationale and position gaps
+ * Step 2: Ranked slice picks with rationale + summary table
  */
 
 const MOCK_PICKS = [
@@ -10,65 +10,59 @@ const MOCK_PICKS = [
   { ticker: 'AAPL', pct: 0.25, rationale: 'Bipartisan buying pattern. Modest add recommended.', followed: false, owned: 4200,  alignment: 'aligned'  },
 ]
 
-const QUICK_AMOUNTS = [100, 250, 500, 1000]
-const MIN_AMOUNT = 50
-const MAX_AMOUNT = 10000
+const DEFAULT_AMOUNT = 150
+const QUICK_AMOUNTS  = [150, 250, 500, 1000]
+const MIN_AMOUNT     = 50
+const MAX_AMOUNT     = 10000
 
 export function renderWhatToBuy(container) {
   container.innerHTML = _renderStep1()
 
-  // Attach event listeners for step 1
-  document.getElementById('amount-input').addEventListener('input', (e) => {
-    const error = document.getElementById('amount-error')
+  // Pill buttons — set amount input value
+  container.querySelector('#amount-pills').addEventListener('click', (e) => {
+    const pill = e.target.closest('[data-amount]')
+    if (!pill) return
+    container.querySelector('#amount-input').value = pill.dataset.amount
+    const error = container.querySelector('#amount-error')
     if (error) error.remove()
   })
 
-  QUICK_AMOUNTS.forEach(amount => {
-    document.getElementById(`pill-${amount}`).addEventListener('click', () => {
-      document.getElementById('amount-input').value = amount
-      const error = document.getElementById('amount-error')
-      if (error) error.remove()
-    })
+  // Clear error on type
+  container.querySelector('#amount-input').addEventListener('input', () => {
+    const error = container.querySelector('#amount-error')
+    if (error) error.remove()
   })
 
-  document.getElementById('get-picks-btn').addEventListener('click', () => {
-    const input = document.getElementById('amount-input')
-    const amount = parseInt(input.value, 10)
+  // Submit
+  container.querySelector('#get-picks-btn').addEventListener('click', () => _submit(container))
 
-    // Clear any previous errors
-    const existingError = document.getElementById('amount-error')
-    if (existingError) existingError.remove()
-
-    // Validate
-    if (!amount || amount === 0) {
-      _showError(input, 'Enter an amount to continue')
-      return
-    }
-    if (amount < MIN_AMOUNT || amount > MAX_AMOUNT) {
-      _showError(input, `Enter an amount between $${MIN_AMOUNT} and $${MAX_AMOUNT}`)
-      return
-    }
-
-    // Show step 2
-    container.innerHTML = _renderStep2(amount)
-
-    // Attach event listeners for step 2
-    document.getElementById('change-amount-link').addEventListener('click', (e) => {
-      e.preventDefault()
-      renderWhatToBuy(container, { navigate })
-    })
-
-    document.getElementById('schwab-link').addEventListener('click', (e) => {
-      e.preventDefault()
-      window.open('https://www.schwab.com/stock-slices', '_blank')
-    })
+  // Enter key
+  container.querySelector('#amount-input').addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') _submit(container)
   })
+}
 
-  // Allow Enter key to submit
-  document.getElementById('amount-input').addEventListener('keypress', (e) => {
-    if (e.key === 'Enter') {
-      document.getElementById('get-picks-btn').click()
-    }
+function _submit(container) {
+  const input  = container.querySelector('#amount-input')
+  const amount = parseInt(input.value, 10)
+
+  const existingError = container.querySelector('#amount-error')
+  if (existingError) existingError.remove()
+
+  if (!amount || amount === 0) {
+    _showError(input, 'Enter an amount to continue')
+    return
+  }
+  if (amount < MIN_AMOUNT || amount > MAX_AMOUNT) {
+    _showError(input, `Enter an amount between $${MIN_AMOUNT.toLocaleString()} and $${MAX_AMOUNT.toLocaleString()}`)
+    return
+  }
+
+  container.innerHTML = _renderStep2(amount)
+
+  container.querySelector('#change-amount-link').addEventListener('click', (e) => {
+    e.preventDefault()
+    renderWhatToBuy(container)
   })
 }
 
@@ -84,7 +78,8 @@ function _renderStep1() {
             <input
               id="amount-input"
               type="number"
-              placeholder="5000"
+              value="${DEFAULT_AMOUNT}"
+              placeholder="${DEFAULT_AMOUNT}"
               style="
                 flex:1;
                 background:var(--bg-primary);
@@ -101,22 +96,20 @@ function _renderStep1() {
             />
           </div>
 
-          <div style="display:flex; gap:var(--s2); flex-wrap:wrap; margin-bottom:var(--s5);">
+          <div id="amount-pills" style="display:flex; gap:var(--s2); flex-wrap:wrap; margin-bottom:var(--s5);">
             ${QUICK_AMOUNTS.map(amount => `
               <button
-                id="pill-${amount}"
+                data-amount="${amount}"
                 style="
-                  padding:var(--s2) var(--s3);
+                  padding:var(--s2) var(--s4);
                   background:var(--bg-elevated);
                   border:1px solid var(--border-soft);
                   border-radius:var(--r2);
                   color:var(--text-secondary);
                   font-size:13px;
                   cursor:pointer;
-                  transition:all var(--fast) var(--ease);
+                  min-height:36px;
                 "
-                onmouseover="this.style.borderColor='var(--border-hard)'; this.style.color='var(--text-primary)'"
-                onmouseout="this.style.borderColor='var(--border-soft)'; this.style.color='var(--text-secondary)'"
               >
                 $${amount.toLocaleString()}
               </button>
@@ -162,8 +155,7 @@ function _renderStep2(totalAmount) {
             text-decoration:none;
             font-size:13px;
             cursor:pointer;
-            transition:color var(--fast) var(--ease);
-          " onmouseover="this.style.color='var(--text-primary)'" onmouseout="this.style.color='var(--text-secondary)'">
+          ">
             ← Change amount
           </a>
           <span style="
@@ -188,19 +180,32 @@ function _renderStep2(totalAmount) {
 
         ${picks.map(pick => _renderPickCard(pick)).join('')}
 
-        <button
-          id="schwab-link"
-          class="btn btn-ghost"
-          style="
-            width:100%;
-            padding:var(--s4);
-            font-size:13px;
-            margin-top:var(--s5);
-            justify-content:center;
-          "
-        >
-          Open in Schwab Stock Slices ↗
-        </button>
+        <!-- Summary table -->
+        <div style="margin-top:var(--s5); border-top:1px solid var(--border-subtle); padding-top:var(--s5);">
+          <div style="font-size:12px; font-weight:600; color:var(--text-tertiary); text-transform:uppercase; letter-spacing:0.07em; margin-bottom:var(--s3);">Order Summary</div>
+          <table style="width:100%; border-collapse:collapse; font-size:13px;">
+            <thead>
+              <tr style="color:var(--text-tertiary); font-size:11px; text-transform:uppercase; letter-spacing:0.06em;">
+                <th style="text-align:left; padding:var(--s2) 0; font-weight:500;">Symbol</th>
+                <th style="text-align:center; padding:var(--s2) 0; font-weight:500;">Action</th>
+                <th style="text-align:right; padding:var(--s2) 0; font-weight:500;">Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${picks.map(pick => `
+                <tr style="border-top:1px solid var(--border-subtle);">
+                  <td style="padding:var(--s3) 0; font-family:var(--font-mono); font-weight:600; color:var(--text-primary);">${pick.ticker}</td>
+                  <td style="padding:var(--s3) 0; text-align:center; color:var(--buy); font-weight:600; font-size:11px; text-transform:uppercase; letter-spacing:0.05em;">BUY</td>
+                  <td style="padding:var(--s3) 0; text-align:right; font-family:var(--font-mono); color:var(--text-primary); font-weight:500;">$${pick.allocAmount.toLocaleString()}</td>
+                </tr>
+              `).join('')}
+              <tr style="border-top:1px solid var(--border-soft);">
+                <td colspan="2" style="padding:var(--s3) 0; color:var(--text-tertiary); font-size:12px;">Total</td>
+                <td style="padding:var(--s3) 0; text-align:right; font-family:var(--font-mono); font-weight:600; color:var(--text-primary);">$${picks.reduce((s, p) => s + p.allocAmount, 0).toLocaleString()}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   `
@@ -239,7 +244,7 @@ function _renderPickCard(pick) {
               font-weight:500;
               color:var(--text-primary);
             ">
-              $${pick.allocAmount.toLocaleString()} (${(pick.pct * 100).toFixed(0)}%)
+              $${pick.allocAmount.toLocaleString()} <span style="color:var(--text-tertiary);font-size:12px;">(${(pick.pct * 100).toFixed(0)}%)</span>
             </span>
           </div>
           <div style="
@@ -251,29 +256,13 @@ function _renderPickCard(pick) {
             ${pick.rationale}
           </div>
           ${pick.followed ? `
-            <div style="
-              font-size:11px;
-              color:var(--buy);
-              font-weight:500;
-            ">
-              ✓ You followed this trade
-            </div>
+            <div style="font-size:11px; color:var(--buy); font-weight:500;">✓ You followed this trade</div>
           ` : ''}
           ${!pick.followed && pick.owned === 0 ? `
-            <div style="
-              font-size:11px;
-              color:var(--text-tertiary);
-            ">
-              Gap: you own $0
-            </div>
+            <div style="font-size:11px; color:var(--text-tertiary);">Gap: you own $0</div>
           ` : ''}
           ${!pick.followed && pick.owned > 0 ? `
-            <div style="
-              font-size:11px;
-              color:var(--text-tertiary);
-            ">
-              You own $${pick.owned.toLocaleString()} — small add.
-            </div>
+            <div style="font-size:11px; color:var(--text-tertiary);">You own $${pick.owned.toLocaleString()} — small add.</div>
           ` : ''}
           ${_alignmentBadge(pick.alignment)}
         </div>
