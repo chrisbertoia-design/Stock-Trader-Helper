@@ -212,7 +212,7 @@
 
 - [ ] **[TopSignal > Signal count text]**: Read the count text below filters
   - **Before**: Default filters (All party, All action, 14d window)
-  - **Expected**: Text reads "6 stocks with congressional activity · last 14 days"
+  - **Expected**: Text reads "7 stocks with congressional activity · last 14 days" (NVDA, MSFT, AAPL, AMZN, META, GOOGL, WMT — WMT is included because it is in the default All / All filter set)
 
 ### Party Filter Pills
 
@@ -252,15 +252,26 @@
 
 - [ ] **[TopSignal > Action pill: tap Sells]**: Tap "Sells" pill
   - **Before**: "All" or "Buys" active
-  - **Expected**: "Sells" activates. List shows stocks where `sellCount > 0`. All 6 stocks have at least 1 sell, so all 6 appear.
+  - **Expected**: "Sells" activates. List shows ONLY stocks where `sellCount > buyCount`. From mock data only WMT qualifies (sellCount=7 > buyCount=2). Count text updates to "1 stock with congressional activity · last 14 days". NVDA, MSFT, AAPL, AMZN, META, and GOOGL do NOT appear — they are all buy-majority.
+  - **Regression**: BUG-SELL-PILL — prior to fix, Sells filtered with `sellCount > 0`, causing all 7 stocks to appear. Correct filter is `sellCount > buyCount`, which yields only WMT.
 
-- [ ] **[TopSignal > Action pill: return to All]**: Tap "All" action
-  - **Before**: "Buys" or "Sells" active
-  - **Expected**: "All" reactivates, full list restored.
+- [ ] **[TopSignal > Action pill Sells — WMT card content]**: After tapping "Sells", inspect the single visible card
+  - **Before**: "Sells" filter active, 1 stock visible
+  - **Expected**: Card shows ticker "WMT". memberCount=6, buyCount=2, sellCount=7. Buy percentage shown as "22%" (2/9 total trades). Signal strength: "●●○ Moderate" (tier=2). Top trader "Collins". "Bipartisan" label (partyD=2 and partyR=4, both > 0).
+
+- [ ] **[TopSignal > Action pill Buys — WMT absent]**: Tap "Buys" pill
+  - **Before**: "All" action active, 7 stocks visible
+  - **Expected**: "Buys" activates. List shows stocks where `buyCount > sellCount`. WMT has buyCount=2, sellCount=7, so WMT is excluded. NVDA, MSFT, AAPL, AMZN, META, GOOGL all appear (all are buy-majority). Count: "6 stocks with congressional activity · last 14 days".
+  - **Regression**: BUG-SELL-PILL — WMT must NOT appear in the Buys filter.
+
+- [ ] **[TopSignal > Action pill: return to All after Sells]**: Tap "All" action after Sells was active
+  - **Before**: "Sells" active, 1 stock (WMT) visible
+  - **Expected**: "All" reactivates, all 7 stocks restore. Count: "7 stocks with congressional activity · last 14 days".
+  - **Regression**: BUG-SELL-PILL — verifies that returning to All restores all 7 stocks including WMT.
 
 - [ ] **[TopSignal > Action pill rapid succession]**: Tap All → Buys → Sells → All → Buys in rapid sequence
   - **Before**: "All" action active
-  - **Expected**: Final state shows "Buys" active. All intermediate renders complete without crash.
+  - **Expected**: Final state shows "Buys" active with 6 stocks (WMT excluded). All intermediate renders complete without crash.
 
 ### Window Filter Pills
 
@@ -288,20 +299,31 @@
 
 - [ ] **[TopSignal > Dem + Buys combined]**: Set Party = Dem, then tap Action = Buys
   - **Before**: "All" party and "All" action active
-  - **Expected**: First tap "Dem": 3 stocks (NVDA, AAPL, META). Then tap "Buys": filters additionally for `buyCount > sellCount`. All three already qualify, so result is still 3 stocks. Count text: "3 stocks with congressional activity · last 14 days".
+  - **Expected**: First tap "Dem": stocks where `partyD >= partyR` — NVDA (D=11≥R=8), AAPL (D=6≥R=4), META (D=4≥R=2) = 3 stocks. Then tap "Buys": additionally filters `buyCount > sellCount`. All three already qualify (all buy-majority), so result is still 3 stocks. WMT has partyD=2 < partyR=4 so it is already excluded by the Dem filter. Count text: "3 stocks with congressional activity · last 14 days".
+
+- [ ] **[TopSignal > Dem + Sells combined]**: Set Party = Dem, then tap Action = Sells
+  - **Before**: "All" party and "All" action active
+  - **Expected**: Party = Dem: NVDA, AAPL, META. Then Sells (`sellCount > buyCount`): none of those three qualify (all are buy-majority). Result: 0 stocks. Empty-state div shows: "No signals" / "No trades match this filter in the selected window."
+  - **Regression**: BUG-SELL-PILL — with the old `sellCount > 0` filter, 3 stocks would appear here. Correct result is 0.
+
+- [ ] **[TopSignal > Rep + Buys combined]**: Set Party = Rep, then tap Action = Buys
+  - **Before**: "All" party and "All" action active
+  - **Expected**: Party = Rep: stocks where `partyR > partyD` — MSFT (R=7>D=5), AMZN (R=5>D=3), GOOGL (R=3>D=2), WMT (R=4>D=2) = 4 stocks. Then Buys (`buyCount > sellCount`): WMT is excluded (sellCount=7 > buyCount=2). Result: MSFT, AMZN, GOOGL = 3 stocks.
+  - **Regression**: BUG-SELL-PILL — WMT must be excluded from Rep + Buys since it is sell-majority.
 
 - [ ] **[TopSignal > Rep + Sells combined]**: Set Party = Rep, then tap Action = Sells
   - **Before**: Some filter state
-  - **Expected**: Party = Rep: MSFT, AMZN, GOOGL. Then Sells (sellCount > 0): all three qualify (each has ≥1 sell). Result: 3 stocks.
+  - **Expected**: Party = Rep: MSFT, AMZN, GOOGL, WMT (4 stocks). Then Sells (`sellCount > buyCount`): only WMT qualifies (sellCount=7 > buyCount=2). Result: 1 stock (WMT). Count: "1 stock with congressional activity · last 14 days".
+  - **Regression**: BUG-SELL-PILL — with the old `sellCount > 0` filter, all 4 Rep stocks would appear here. Correct result is 1 (WMT only).
 
-- [ ] **[TopSignal > Empty state via filter]**: Set a combination that yields 0 results (e.g., if possible)
+- [ ] **[TopSignal > Empty state via filter]**: Set a combination that yields 0 results (e.g., Dem + Sells)
   - **Before**: Some filter active
   - **Expected**: If filtered result is 0, empty-state div shows: title "No signals", subtitle "No trades match this filter in the selected window." Signal list area is empty. Count text reads "0 stocks with congressional activity".
 
 ### Signal Card Content
 
 - [ ] **[TopSignal > Card 1 content (NVDA)]**: Inspect the first signal card
-  - **Before**: Default filters (All / All / 14d), all 6 cards visible
+  - **Before**: Default filters (All / All / 14d), all 7 cards visible
   - **Expected**: Rank "#1" in monospace secondary color. Ticker "NVDA" bold monospace. Tier badge "Tier 3" with bright styling (class `tier-bright`, bright/green appearance). "Bipartisan" label (small pill, since both D=11 and R=8 > 0). Company name "NVIDIA Corp". "Buy →" button in accent gold color on right. Member count "19" bold. Buy percentage "89%" in buy color (17/19). Sub-label "17B · 2S" in tertiary. Top trader "Pelosi · 1 day ago". Party progress bar: ~58% blue (D) / ~42% red (R). Signal strength: "●●● Strong" in buy color (green).
 
 - [ ] **[TopSignal > Card 2 content (MSFT)]**: Inspect second card
@@ -311,6 +333,11 @@
 - [ ] **[TopSignal > Card 5/6 tier-subtle (META or GOOGL)]**: Inspect META or GOOGL card
   - **Before**: Default filters
   - **Expected**: Tier badge "Tier 1" with subtle styling (class `tier-subtle`, tertiary text color). Signal strength: "●○○ Weak" in tertiary color.
+
+- [ ] **[TopSignal > WMT card content (sell-majority)]**: Inspect WMT card (visible under All / All filter)
+  - **Before**: Default filters (All / All / 14d), all 7 cards visible
+  - **Expected**: Ticker "WMT". Tier badge "Tier 2". "Bipartisan" label (partyD=2 and partyR=4, both > 0). memberCount=6. Buy percentage shown as "22%" (2 buys out of 9 total trades). Sub-label "2B · 7S" in tertiary. Top trader "Collins". Party progress bar: ~33% blue (D) / ~67% red (R). Signal strength: "●●○ Moderate" in accent color.
+  - **Regression**: BUG-SELL-PILL — WMT must appear under All/All filters but disappear under the Buys filter and appear alone under the Sells filter.
 
 - [ ] **[TopSignal > Buy → button tap]**: Tap "Buy →" on any signal card
   - **Before**: Top Signal view active
@@ -322,9 +349,9 @@
 
 ### Scroll
 
-- [ ] **[TopSignal > Scroll through all 6 cards]**: Scroll down through all 6 signal cards
+- [ ] **[TopSignal > Scroll through all 7 cards]**: Scroll down through all 7 signal cards
   - **Before**: Top Signal at top
-  - **Expected**: All cards reachable. No content clipped. No crash.
+  - **Expected**: All 7 cards reachable (NVDA, MSFT, AAPL, AMZN, META, GOOGL, WMT). No content clipped. No crash.
 
 ### Navigation Out
 
@@ -391,6 +418,26 @@
   - **Before**: Positions view
   - **Expected**: File picker opens once. No crash.
 
+- [ ] **[Positions > Upload CSV — select file then immediately tap Back]**: Tap "Upload CSV", select a valid CSV file, then immediately tap ← back before parsing completes
+  - **Before**: File selected, button transitioning to "Parsing…" state
+  - **Expected**: Back button navigates to Home immediately. Home view renders cleanly with four tiles. No "Parsing…" button bleeds through. No ghost DOM elements from the Positions view remain visible. The `signal?.aborted` and `container.isConnected` guards in the `reader.onload` callback prevent any post-navigation DOM writes.
+  - **Regression**: BUG-CSV-NAV — before the fix, navigating away mid-upload caused stale Positions DOM to render over whatever view was active after navigation.
+
+- [ ] **[Positions > Upload CSV — navigate away while "Parsing…" showing]**: Trigger CSV parse (button shows "Parsing…"), then tap ← within the ~30ms yield window
+  - **Before**: Upload button shows "Parsing…" and is disabled
+  - **Expected**: Home view renders correctly and is fully interactive. The upload operation resolves internally but all DOM writes are gated by `container.isConnected`. No crash, no blank screen, no Positions content appearing in home.
+  - **Regression**: BUG-CSV-NAV — stale async render guard.
+
+- [ ] **[Positions > Upload CSV — "Parsing…" state never gets permanently stuck]**: Trigger CSV upload; if file read does not complete within 15 seconds (simulated by a very large or unresponsive file)
+  - **Before**: Button shows "Parsing…"
+  - **Expected**: Button returns to "Upload CSV" state within 15 seconds maximum (the `_readTimeout` fires at 15000ms). A toast appears: "File read timed out — please try again" in error styling. Button re-enables and is interactive.
+  - **Regression**: BUG-CSV-NAV — upload button must never be permanently stuck in "Parsing…".
+
+- [ ] **[Positions > Upload CSV — navigate away while "Saving…" showing]**: After parse completes (button shows "Saving…"), tap ← back before Sheets write finishes
+  - **Before**: Upload button shows "Saving…", Sheets write in progress
+  - **Expected**: Home view renders and is fully interactive. The Sheets write completes in the background but the `container.isConnected` guard prevents `renderPositions()` from overwriting the current view. No ghost DOM from Positions view.
+  - **Regression**: BUG-CSV-NAV — covers the Sheets-save phase of the navigation guard.
+
 ### Navigation Out
 
 - [ ] **[Positions > Back button]**: Tap ← from Positions
@@ -406,7 +453,8 @@
 
 - [ ] **[WhatToBuy > Entry path]**: From Home, tap "What to Buy" tile
   - **Before**: Home view
-  - **Expected**: What to Buy Step 1 renders inside a card. Heading "How much are you investing?". Dollar sign "$" to the left of the input. Amount input pre-filled with "150". "# of picks" label with stepper: "−" button, count display "3" in monospace bold, "+" button, and "3 available" label in tertiary text. Four quick-amount pills: $150, $250, $500, $1,000. Primary button "Get 3 Picks →" spanning full width. Footer disclaimer text. Back button visible.
+  - **Expected**: What to Buy Step 1 renders inside a card. Heading "How much are you investing?". Dollar sign "$" to the left of the input. Amount input pre-filled with "150". "# of picks" label with stepper: "−" button, count display "3" in monospace bold (DEFAULT_PICK_COUNT = MOCK_PICKS.length = 3), "+" button, and "30 available" label in tertiary text (MAX_PICK_COUNT = 30). Four quick-amount pills: $150, $250, $500, $1,000. Primary button "Get 3 Picks →" spanning full width. Footer disclaimer text. Back button visible.
+  - **Regression**: BUG-STEPPER-MAX — before the fix, the label incorrectly read "3 available" due to MAX_PICK_COUNT being set to 3. Correct value is 30.
 
 ### Amount Input
 
@@ -464,7 +512,8 @@
 
 - [ ] **[WhatToBuy > Stepper — initial state]**: Inspect the stepper on fresh load
   - **Before**: What to Buy Step 1 just loaded
-  - **Expected**: "−" button (44×44px touch target), count display "3" in monospace bold center-aligned, "+" button (44×44px touch target). "3 available" text in tertiary to the right of the stepper.
+  - **Expected**: "−" button (44×44px touch target), count display "3" in monospace bold center-aligned (DEFAULT_PICK_COUNT = MOCK_PICKS.length = 3), "+" button (44×44px touch target). "30 available" text in tertiary to the right of the stepper (MAX_PICK_COUNT = 30).
+  - **Regression**: BUG-STEPPER-MAX — the available label must read "30 available", not "3 available".
 
 - [ ] **[WhatToBuy > Stepper — decrement]**: Tap "−" button once
   - **Before**: Count shows "3"
@@ -477,18 +526,26 @@
 - [ ] **[WhatToBuy > Stepper — decrement floor at 1]**: With count at 1, tap "−" again
   - **Before**: Count shows "1"
   - **Expected**: Count stays at "1". `Math.max(1, 1-1)` = 1. No change. No crash.
+  - **Regression**: BUG-STEPPER-MAX — min floor of 1 must be enforced.
 
 - [ ] **[WhatToBuy > Stepper — increment from 1]**: With count at 1, tap "+" button
   - **Before**: Count shows "1"
   - **Expected**: Count increments to "2". Button reads "Get 2 Picks →".
 
-- [ ] **[WhatToBuy > Stepper — increment to max (3)]**: Tap "+" from count 1 until max
-  - **Before**: Count at 1
-  - **Expected**: Count goes 1 → 2 → 3. At 3, further taps do nothing — `Math.min(MOCK_PICKS.length, count+1)` = 3. Does not exceed 3.
-
-- [ ] **[WhatToBuy > Stepper — increment ceiling at 3]**: With count at 3, tap "+" again
+- [ ] **[WhatToBuy > Stepper — increment past 3]**: Starting from count "3", tap "+" four times
   - **Before**: Count shows "3"
-  - **Expected**: Count stays at "3". No change. "3 available" label confirms this is the cap.
+  - **Expected**: Count goes 3 → 4 → 5 → 6 → 7. The stepper is NOT capped at 3. `Math.min(MAX_PICK_COUNT, count+1)` allows up to 30. Each tap registers correctly.
+  - **Regression**: BUG-STEPPER-MAX — before the fix, incrementing from 3 did nothing because MAX_PICK_COUNT was incorrectly set to 3 (MOCK_PICKS.length) instead of 30.
+
+- [ ] **[WhatToBuy > Stepper — increment to 30]**: Starting from count "1", tap "+" 29 times (or type to simulate)
+  - **Before**: Count shows "1"
+  - **Expected**: Count reaches "30". Button reads "Get 30 Picks →". At 30, the "30 available" label confirms this is the maximum.
+  - **Regression**: BUG-STEPPER-MAX — the true ceiling is MAX_PICK_COUNT = 30.
+
+- [ ] **[WhatToBuy > Stepper — increment ceiling at 30]**: With count at 30, tap "+" again
+  - **Before**: Count shows "30"
+  - **Expected**: Count stays at "30". `Math.min(30, 30+1)` = 30. No change. No crash.
+  - **Regression**: BUG-STEPPER-MAX — max ceiling of 30 must be enforced.
 
 ### Get Picks Button — Validation
 
