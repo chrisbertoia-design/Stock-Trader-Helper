@@ -46,7 +46,7 @@ export function renderWhatToBuy(container) {
   })
   container.querySelector('#pick-increment').addEventListener('click', () => {
     const inp = container.querySelector('#pick-count-display')
-    const val = Math.min(MAX_PICK_COUNT, parseInt(inp.textContent, 10) + 1)
+    const val = Math.min(MOCK_PICKS.length, parseInt(inp.textContent, 10) + 1)
     inp.textContent = val
     _updatePicksBtn(container)
   })
@@ -82,7 +82,7 @@ function _submit(container) {
   const input      = container.querySelector('#amount-input')
   const pickDisplay = container.querySelector('#pick-count-display')
   const amount      = parseInt(input.value, 10)
-  const pickCount   = Math.min(Math.max(parseInt(pickDisplay?.textContent, 10) || DEFAULT_PICK_COUNT, 1), MAX_PICK_COUNT)
+  const pickCount   = Math.min(Math.max(parseInt(pickDisplay?.textContent, 10) || DEFAULT_PICK_COUNT, 1), MOCK_PICKS.length)
 
   const existingError = container.querySelector('#amount-error')
   if (existingError) existingError.remove()
