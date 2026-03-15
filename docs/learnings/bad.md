@@ -47,3 +47,25 @@ causing an `AbortError` that also triggers the mock fallback. The mock path is i
 `fetch('https://house-stock-watcher-data.s3-us-east-2.amazonaws.com/...')` from `localhost:5175` triggers
 CORS preflight rejection. Browser throws "Failed to fetch" before any data arrives.
 **Fix**: Vite dev proxy routes `/api/hsw` → S3 with `changeOrigin: true`. Production keeps direct URL.
+
+## 2026-03-15 | Test isolation masked production API failure for days
+**Root cause**: Playwright tests used `route.abort()` to intercept HSW S3 requests. Both "real 403 from
+wrong region" and "test-aborted request" produce the same `AbortError` / network error in the catch block,
+triggering the mock-data fallback. Tests passed green. Production showed mock data. No one noticed because
+the mock fallback UI (orange banner + 5 trades) looks like a valid state.
+**Why it was hard to find**: (1) The mock fallback path is designed to be seamless — it's a feature, not a
+crash. (2) Tests specifically block the network call, so they can never distinguish "blocked by test" from
+"blocked by wrong URL." (3) The 403 from S3 wrong-region has no CORS headers, so the browser shows
+"Failed to fetch" not "403 Forbidden" — further obscuring the real cause.
+**Lesson**: When a view has a "graceful fallback to mock data" path, that path MUST be tested explicitly.
+Add a test that asserts the mock-data banner is absent under success conditions. If you can only abort in
+tests, add a comment flagging the coverage gap.
+**Prevention rule added to CLAUDE.md**: See "Mock fallback observability" in Key Architecture Decisions.
+
+## 2026-03-15 | USER_ENTERED Sheets writes silently mangle date strings
+Google Sheets `USER_ENTERED` valueInputOption auto-interprets `2026-03-14` as a date serial number
+(e.g. 46100). Downstream readers get a number instead of a string. The bug is silent — no error thrown,
+data looks correct in Sheets UI (shows formatted date), but API reads return the serial.
+**Fix**: all writes use `valueInputOption: 'RAW'`. Added `_parseDateField()` serial guard on read for
+backward compat with rows written before the fix.
+**Detection tip**: if a date field reads back as a 5-digit number in range 40000-60000, it's a Sheets date serial.
