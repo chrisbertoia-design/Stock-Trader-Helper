@@ -61,13 +61,13 @@ export const warn  = (cat, msg, d) => log('WARN',  cat, msg, d)
 export const error = (cat, msg, d) => log('ERROR', cat, msg, d)
 
 async function _flushBuffer() {
-  if (_flushing || !_sheetsWriter || _buffer.length === 0) return
+  if (_flushing || _writing || !_sheetsWriter || _buffer.length === 0) return
   _flushing = true
   const entries = [..._buffer]
   _buffer = []
   try {
     await _sheetsWriter(entries)
-    log('DEBUG', 'LOGGER', `Flushed ${entries.length} buffered log entries`)
+    console.log(`[LOGGER] Flushed ${entries.length} buffered log entries`) // use console to avoid re-entrancy
   } catch (e) {
     console.error('[LOGGER] Failed to flush buffer:', e)
     _buffer = [...entries, ..._buffer] // put back on failure
@@ -75,12 +75,18 @@ async function _flushBuffer() {
   _flushing = false
 }
 
+let _writing = false  // re-entrancy guard: prevents appendRows→debug→appendRows loop
+
 async function _writeToSheets(entry) {
+  if (_writing) { _buffer.push(entry); return }
+  _writing = true
   try {
     await _sheetsWriter([entry])
   } catch (e) {
     console.error('[LOGGER] Sheets write failed:', e, entry)
     _buffer.push(entry) // buffer on failure
+  } finally {
+    _writing = false
   }
 }
 
