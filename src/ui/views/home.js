@@ -1,8 +1,17 @@
 /**
  * Home dashboard — 4 summary cards.
- * Pure mock data. No imports from stores or API.
+ * Portfolio card uses live data from the positions store.
  * Cards use onclick="window._navigate(...)" — no closure, no async.
  */
+
+import { getPositionsSummary, getPositions } from '../../stores/positions.js'
+
+function isMockPositions() {
+  const positions = getPositions()
+  const entries   = Object.values(positions)
+  if (!entries.length) return true
+  return entries.every(p => p.source === 'mock')
+}
 
 function _greeting() {
   const h = new Date().getHours()
@@ -27,33 +36,30 @@ const MOCK_FEED = { newCount: 4, topTrade: { politician: 'Pelosi', ticker: 'NVDA
 
 const MOCK_SIGNAL = { ticker: 'NVDA', tier: 2, flags: 'R + D', stat: '14% of Congress buying · last 14 days' }
 
-const MOCK_PORTFOLIO = {
-  account_total:   12450,
-  total_gl:        2.3,
-  position_count:  8,
-  last_updated:    'Mar 11',
-  last_purchase:   'Mar 7',
-  alignment_score: '2 of 3 aligned',
-}
 
 // ── Render ────────────────────────────────────────────────────────────────────
 
 export function renderHome(container) {
-  const { newCount, topTrade }                                       = MOCK_FEED
-  const { ticker: sigTicker, tier, flags, stat }                     = MOCK_SIGNAL
-  const { account_total, total_gl, position_count,
-          last_updated, last_purchase, alignment_score }             = MOCK_PORTFOLIO
+  const { newCount, topTrade }                   = MOCK_FEED
+  const { ticker: sigTicker, tier, flags, stat } = MOCK_SIGNAL
 
-  const tierClass   = tier >= 3 ? 'tier-bright' : tier === 2 ? 'tier-accent' : 'tier-subtle'
-  const glColor     = total_gl >= 0 ? 'var(--buy)' : 'var(--sell)'
-  const glSign      = total_gl >= 0 ? '+' : ''
+  const tierClass = tier >= 3 ? 'tier-bright' : tier === 2 ? 'tier-accent' : 'tier-subtle'
 
-  const alignMatch  = alignment_score.match(/^(\d+) of (\d+)/)
-  let   alignColor  = 'var(--sell)'
-  if (alignMatch) {
-    const n = +alignMatch[1], tot = +alignMatch[2]
-    alignColor = n === tot ? 'var(--buy)' : n >= tot - 1 ? 'var(--accent)' : 'var(--sell)'
-  }
+  // ── Live portfolio data ──────────────────────────────────────────────────────
+  const posSummary    = getPositionsSummary()
+  const posIsMock     = isMockPositions()
+
+  const accountTotal  = posSummary.account_total  || 0
+  const totalGlPct    = posSummary.total_gl_pct   || 0
+  const positionCount = posSummary.position_count || 0
+  const lastUpload    = posSummary.last_csv_upload
+
+  const lastUpdatedFmt = lastUpload
+    ? new Date(lastUpload + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+    : null
+
+  const glSign  = totalGlPct >= 0 ? '+' : ''
+  const glColor = totalGlPct >= 0 ? 'var(--buy)' : 'var(--sell)'
 
   container.innerHTML = `
     <div class="home-wrapper">
@@ -97,17 +103,20 @@ export function renderHome(container) {
             <span class="home-card-title">My Portfolio</span>
             <span class="home-card-chevron">›</span>
           </div>
+          ${accountTotal > 0 ? `
           <div class="home-card-value">
-            <span style="font-weight:700;">${_fmt$(account_total)}</span>
-            <span style="color:${glColor};font-size:14px;">${glSign}${total_gl.toFixed(1)}</span>
+            <span style="font-weight:700;">${_fmt$(accountTotal)}</span>
+            <span style="color:${glColor};font-size:14px;margin-left:6px;">${glSign}${totalGlPct.toFixed(1)}%</span>
+            ${posIsMock ? '<span style="font-size:11px;color:var(--text-tertiary);margin-left:6px;">sample data</span>' : ''}
           </div>
-          <div class="home-card-sub">${position_count} positions</div>
+          <div class="home-card-sub">${positionCount} positions</div>
           <div style="font-size:12px;color:var(--text-tertiary);margin-top:4px;">
-            Updated ${last_updated} · Last buy ${last_purchase}
+            ${lastUpdatedFmt ? `Updated ${lastUpdatedFmt}` : 'No data uploaded'}
           </div>
-          <div style="font-size:12px;color:${alignColor};font-weight:500;margin-top:6px;">
-            ● ${alignment_score}
-          </div>
+          ` : `
+          <div class="home-card-value" style="font-size:15px;color:var(--text-secondary);">—</div>
+          <div class="home-card-sub" style="color:var(--text-tertiary);">Upload CSV to see your real portfolio</div>
+          `}
         </button>
 
         <!-- What to Buy -->

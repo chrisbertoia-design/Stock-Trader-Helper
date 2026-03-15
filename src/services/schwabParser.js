@@ -19,6 +19,26 @@ import { debug, info, warn } from './logger.js'
 
 const CAT = 'SCHWAB_PARSER'
 
+// CUSIP → ticker map: Schwab sometimes stores ETF fractional shares by CUSIP in transaction history
+const CUSIP_TO_TICKER = {
+  '33813J106': 'IAU',   // iShares Gold Trust
+  '46435G103': 'IVV',   // iShares Core S&P 500
+  '78462F103': 'SPY',   // SPDR S&P 500 ETF Trust
+  '46090E103': 'QQQ',   // Invesco QQQ Trust
+  '81369Y605': 'GLD',   // SPDR Gold Shares
+  '36467W109': 'GDX',   // VanEck Gold Miners ETF
+  '46137V357': 'IJR',   // iShares Core S&P Small-Cap
+  '464287655': 'IWM',   // iShares Russell 2000
+  '78468R103': 'QYLD',  // Global X NASDAQ 100 Covered Call
+}
+
+function _normalizeTicker(sym) {
+  if (!sym) return sym
+  // 9-char alphanumeric = likely a CUSIP
+  if (/^[A-Z0-9]{9}$/.test(sym) && CUSIP_TO_TICKER[sym]) return CUSIP_TO_TICKER[sym]
+  return sym
+}
+
 const POSITION_ACTIONS = new Set([
   'buy', 'sell',
   'reinvest sha', 'reinvest shares',
@@ -54,6 +74,7 @@ export function parseTransactionsCsv(csvText) {
   }
 
   info(CAT, `Parsed ${transactions.length} transactions from CSV`)
+  transactions._txCount = transactions.length
   return transactions
 }
 
@@ -85,7 +106,7 @@ export function derivePositions(transactions) {
   // Remove positions with zero or near-zero quantity (sold out)
   const result = {}
   for (const [sym, pos] of Object.entries(positions)) {
-    if (Math.abs(pos.quantity) < 0.0001) continue
+    if (Math.abs(pos.quantity) < 0.001) continue
     result[sym] = {
       ticker:       sym,
       quantity:     Math.round(pos.quantity * 10000) / 10000,
@@ -125,7 +146,7 @@ export function parsePositionsCsv(csvText) {
       const row = {}
       headers.forEach((h, i) => { row[h] = cols[i] || '' })
 
-      const sym = (row.symbol || '').replace(/"/g, '').trim().toUpperCase()
+      const sym = _normalizeTicker((row.symbol || '').replace(/"/g, '').trim().toUpperCase())
       if (!sym || sym === 'ACCOUNT') continue
 
       positions[sym] = {
@@ -155,7 +176,7 @@ function _parseLine(line) {
 
   const date        = cols[0]?.trim()
   const action      = cols[1]?.trim()
-  const symbol      = cols[2]?.trim().toUpperCase() || ''
+  const symbol      = _normalizeTicker(cols[2]?.trim().toUpperCase() || '')
   const description = cols[3]?.trim()
   const quantity    = _parseNum(cols[4] || '0')
   const price       = _parseNum(cols[5] || '0')

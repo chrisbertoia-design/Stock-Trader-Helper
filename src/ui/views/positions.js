@@ -149,6 +149,7 @@ function _wireUpload(container, signal) {
         if (isTransactions) {
           debug(CAT, 'Detected transactions CSV format')
           const transactions = parseTransactionsCsv(csvText)
+          const rawTxCount = transactions.length
           // Yield again after heavy parse
           await new Promise(r => setTimeout(r, 0))
           parsed = derivePositions(transactions)
@@ -156,6 +157,7 @@ function _wireUpload(container, signal) {
             throw new Error('No positions derived from transactions CSV')
           }
           info(CAT, `Derived ${Object.keys(parsed).length} positions from transactions CSV`)
+          parsed._rawTxCount = rawTxCount
         } else {
           debug(CAT, 'Detected positions CSV format')
           parsed = parsePositionsCsv(csvText)
@@ -192,8 +194,12 @@ function _wireUpload(container, signal) {
           }
         }
 
-        const count = Object.keys(parsed).length
-        showToast(`${count} positions loaded`, 'success')
+        const count = Object.keys(parsed).filter(k => k !== '_rawTxCount').length
+        const rawTxCount = parsed._rawTxCount
+        const toastMsg = isTransactions
+          ? `${count} positions derived from ${rawTxCount} transactions`
+          : `${count} positions loaded from positions export`
+        showToast(toastMsg, 'success')
         // skipLoad:true — data is already fresh in memory from setPositions() above.
         // invalidatePositionsCache so the *next* navigation re-reads from Sheets.
         invalidatePositionsCache()
@@ -240,14 +246,17 @@ export async function renderPositions(container, signal, { skipLoad = false } = 
   // Guard: if navigated away during async load, don't overwrite the new view
   if (signal?.aborted || !container.isConnected) return
 
-  const positions = getPositions()
-  const summary   = getPositionsSummary()
+  const allPositions = getPositions()
+  const summary      = getPositionsSummary()
 
   // Check if we're using mock data
-  const isMock = Object.values(positions).some(p => p.source === 'mock')
+  const isMock = Object.values(allPositions).some(p => p.source === 'mock')
+
+  // Filter out zero-quantity positions (transactions CSV residuals, fully-sold positions)
+  const validPositions = Object.values(allPositions).filter(p => p.ticker === 'CASH' || p.ticker === '$' || Math.abs(p.quantity || 0) >= 0.001)
 
   // Sort by market value descending, but put cash at the end
-  const sortedPositions = Object.values(positions).sort((a, b) => {
+  const sortedPositions = validPositions.sort((a, b) => {
     const aCash = a.ticker === 'CASH' || a.ticker === '$'
     const bCash = b.ticker === 'CASH' || b.ticker === '$'
     if (aCash && !bCash) return 1
@@ -266,6 +275,17 @@ export async function renderPositions(container, signal, { skipLoad = false } = 
     subtitleParts.push(`Updated ${summary.last_csv_upload}`)
   }
 
+  // Calculate days since last upload
+  const _daysStale = (() => {
+    const lastUpload = summary.last_csv_upload
+    if (!lastUpload) return 0
+    const msPerDay = 86400000
+    return Math.floor((Date.now() - new Date(lastUpload).getTime()) / msPerDay)
+  })()
+  const _staleWarning = (!isMock && _daysStale > 7)
+    ? `<div style="color:#f0a500; font-size:12px; margin-top:4px;">⚠ Data is ${_daysStale} days old — upload a fresh CSV</div>`
+    : ''
+
   container.innerHTML = `
     <div class="positions-header" style="margin-bottom:var(--s5);">
       <div style="display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:var(--s4);">
@@ -275,6 +295,7 @@ export async function renderPositions(container, signal, { skipLoad = false } = 
             ${subtitleParts.join(' · ')}
           </div>
           ${isMock ? `<div style="font-size:11px; color:var(--accent); margin-top:4px;">Using sample data — upload CSV to see your real positions</div>` : ''}
+          ${_staleWarning}
         </div>
         <input type="file" accept=".csv" id="csv-upload" style="display:none" />
         <button class="btn btn-ghost" id="csv-upload-label" style="font-size:12px; min-height:44px;">
