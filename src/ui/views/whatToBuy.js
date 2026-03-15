@@ -10,10 +10,12 @@ const MOCK_PICKS = [
   { ticker: 'AAPL', pct: 0.25, rationale: 'Bipartisan buying pattern. Modest add recommended.', followed: false, owned: 4200,  alignment: 'aligned'  },
 ]
 
-const DEFAULT_AMOUNT = 150
-const QUICK_AMOUNTS  = [150, 250, 500, 1000]
-const MIN_AMOUNT     = 50
-const MAX_AMOUNT     = 10000
+const DEFAULT_AMOUNT    = 150
+const QUICK_AMOUNTS     = [150, 250, 500, 1000]
+const MIN_AMOUNT        = 50
+const MAX_AMOUNT        = 10000
+const DEFAULT_PICK_COUNT = MOCK_PICKS.length  // defaults to available recommendations
+const MAX_PICK_COUNT    = 30
 
 export function renderWhatToBuy(container) {
   container.innerHTML = _renderStep1()
@@ -43,8 +45,10 @@ export function renderWhatToBuy(container) {
 }
 
 function _submit(container) {
-  const input  = container.querySelector('#amount-input')
-  const amount = parseInt(input.value, 10)
+  const input      = container.querySelector('#amount-input')
+  const pickInput  = container.querySelector('#pick-count-input')
+  const amount     = parseInt(input.value, 10)
+  const pickCount  = Math.min(Math.max(parseInt(pickInput?.value, 10) || DEFAULT_PICK_COUNT, 1), MAX_PICK_COUNT)
 
   const existingError = container.querySelector('#amount-error')
   if (existingError) existingError.remove()
@@ -58,7 +62,7 @@ function _submit(container) {
     return
   }
 
-  container.innerHTML = _renderStep2(amount)
+  container.innerHTML = _renderStep2(amount, pickCount)
 
   container.querySelector('#change-amount-link').addEventListener('click', (e) => {
     e.preventDefault()
@@ -73,27 +77,57 @@ function _renderStep1() {
         <div style="margin-bottom:var(--s5);">
           <h2 style="font-size:15px; font-weight:500; margin-bottom:var(--s4); color:var(--text-primary);">How much are you investing?</h2>
 
-          <div style="display:flex; align-items:center; margin-bottom:var(--s4);">
-            <span style="font-size:18px; color:var(--text-secondary); margin-right:var(--s2);">$</span>
-            <input
-              id="amount-input"
-              type="number"
-              value="${DEFAULT_AMOUNT}"
-              placeholder="${DEFAULT_AMOUNT}"
-              style="
-                flex:1;
-                background:var(--bg-primary);
-                border:1px solid var(--border-soft);
-                border-radius:var(--r2);
-                padding:var(--s3) var(--s4);
-                font-size:18px;
-                color:var(--text-primary);
-                font-family:var(--font-mono);
-                transition:border-color var(--fast) var(--ease);
-              "
-              onfocus="this.style.borderColor='var(--accent)'"
-              onblur="this.style.borderColor='var(--border-soft)'"
-            />
+          <!-- Amount + pick count row -->
+          <div style="display:flex; align-items:center; gap:var(--s3); margin-bottom:var(--s4);">
+            <!-- Dollar amount -->
+            <div style="display:flex; align-items:center; flex:1;">
+              <span style="font-size:18px; color:var(--text-secondary); margin-right:var(--s2);">$</span>
+              <input
+                id="amount-input"
+                type="number"
+                value="${DEFAULT_AMOUNT}"
+                placeholder="${DEFAULT_AMOUNT}"
+                style="
+                  flex:1;
+                  background:var(--bg-primary);
+                  border:1px solid var(--border-soft);
+                  border-radius:var(--r2);
+                  padding:var(--s3) var(--s4);
+                  font-size:18px;
+                  color:var(--text-primary);
+                  font-family:var(--font-mono);
+                  transition:border-color var(--fast) var(--ease);
+                "
+                onfocus="this.style.borderColor='var(--accent)'"
+                onblur="this.style.borderColor='var(--border-soft)'"
+              />
+            </div>
+
+            <!-- Pick count -->
+            <div style="display:flex; flex-direction:column; align-items:center; gap:2px;">
+              <input
+                id="pick-count-input"
+                type="number"
+                value="${DEFAULT_PICK_COUNT}"
+                min="1"
+                max="${MAX_PICK_COUNT}"
+                style="
+                  width:52px;
+                  background:var(--bg-primary);
+                  border:1px solid var(--border-soft);
+                  border-radius:var(--r2);
+                  padding:var(--s3) var(--s2);
+                  font-size:18px;
+                  color:var(--text-primary);
+                  font-family:var(--font-mono);
+                  text-align:center;
+                  transition:border-color var(--fast) var(--ease);
+                "
+                onfocus="this.style.borderColor='var(--accent)'"
+                onblur="this.style.borderColor='var(--border-soft)'"
+              />
+              <span style="font-size:10px; color:var(--text-tertiary); white-space:nowrap;">picks (max ${MAX_PICK_COUNT})</span>
+            </div>
           </div>
 
           <div id="amount-pills" style="display:flex; gap:var(--s2); flex-wrap:wrap; margin-bottom:var(--s5);">
@@ -139,11 +173,14 @@ function _renderStep1() {
   `
 }
 
-function _renderStep2(totalAmount) {
-  const picks = MOCK_PICKS.map((pick, idx) => ({
+function _renderStep2(totalAmount, pickCount) {
+  // Slice to requested count (capped by available mock data)
+  const available = MOCK_PICKS.slice(0, pickCount)
+  const perPick   = Math.round(totalAmount / available.length / 25) * 25
+  const picks = available.map((pick, idx) => ({
     ...pick,
     rank: idx + 1,
-    allocAmount: Math.round(totalAmount * pick.pct / 25) * 25,
+    allocAmount: perPick,
   }))
 
   return `
@@ -171,7 +208,8 @@ function _renderStep2(totalAmount) {
         <div style="margin-bottom:var(--s5);">
           <h2 style="font-size:15px; font-weight:500; margin-bottom:var(--s1); color:var(--text-primary);">Recommended Slices</h2>
           <div style="font-size:12px; color:var(--text-tertiary); margin-bottom:var(--s2);">
-            ${picks.length} picks · based on recent signals
+            ${picks.length} pick${picks.length !== 1 ? 's' : ''} · based on recent signals
+            ${pickCount > MOCK_PICKS.length ? ` <span style="color:var(--accent);">(${MOCK_PICKS.length} available today)</span>` : ''}
           </div>
           <div style="font-size:11px; color:var(--text-secondary); margin-bottom:var(--s4);">
             Portfolio match: ${_alignmentSummary(picks)}

@@ -10,6 +10,7 @@ import { renderFeed }      from './views/feed.js'
 import { renderPositions } from './views/positions.js'
 import { renderSettings }  from './views/settings.js'
 import { renderWhatToBuy } from './views/whatToBuy.js'
+import { renderTopSignal }  from './views/topSignal.js'
 
 const CAT = 'APP_SHELL'
 
@@ -38,7 +39,7 @@ export function renderApp({ spreadsheetId }) {
   const settingsBtn = document.getElementById('settings-btn')
   let   activeView  = null
 
-  function navigate(viewName) {
+  async function navigate(viewName) {
     if (viewName === activeView) return
     activeView = viewName
 
@@ -50,11 +51,12 @@ export function renderApp({ spreadsheetId }) {
     viewContent.innerHTML = ''
 
     try {
-      if      (viewName === 'home')      renderHome(viewContent)
-      else if (viewName === 'feed')      renderFeed(viewContent)
-      else if (viewName === 'positions') renderPositions(viewContent)
-      else if (viewName === 'settings')  renderSettings(viewContent)
-      else if (viewName === 'whatToBuy') renderWhatToBuy(viewContent)
+      if      (viewName === 'home')      await renderHome(viewContent)
+      else if (viewName === 'feed')      await renderFeed(viewContent)
+      else if (viewName === 'positions') await renderPositions(viewContent)
+      else if (viewName === 'settings')  await renderSettings(viewContent)
+      else if (viewName === 'whatToBuy') await renderWhatToBuy(viewContent)
+      else if (viewName === 'topSignal') await renderTopSignal(viewContent)
     } catch (e) {
       console.error('[APP] render error:', e)
       viewContent.innerHTML = `

@@ -78,7 +78,7 @@ export function renderHome(container) {
         </button>
 
         <!-- Top Signal -->
-        <button class="home-card" onclick="window._navigate('whatToBuy')">
+        <button class="home-card" onclick="window._navigate('topSignal')">
           <div class="home-card-header">
             <span class="home-card-title">Top Signal</span>
             <span class="home-card-chevron">›</span>
@@ -88,7 +88,7 @@ export function renderHome(container) {
             <span class="tier-badge ${tierClass}">Tier ${tier}</span>
             <span style="color:var(--text-secondary);">· ${flags}</span>
           </div>
-          <div class="home-card-sub">${stat} · tap to invest</div>
+          <div class="home-card-sub">${stat} · stocks by member activity</div>
         </button>
 
         <!-- My Portfolio -->
