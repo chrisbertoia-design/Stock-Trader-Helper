@@ -5,16 +5,23 @@
  */
 
 const MOCK_PICKS = [
-  { ticker: 'NVDA', pct: 0.40, rationale: 'Pelosi + 14% of Congress buying. AI chip tailwind.', followed: true,  owned: 2800,  alignment: 'aligned'  },
-  { ticker: 'MSFT', pct: 0.35, rationale: 'Crenshaw bought recently. Strong enterprise AI demand.', followed: false, owned: 0,     alignment: 'gap'      },
-  { ticker: 'AAPL', pct: 0.25, rationale: 'Bipartisan buying pattern. Modest add recommended.', followed: false, owned: 4200,  alignment: 'aligned'  },
+  { ticker: 'NVDA', pct: 0.22, rationale: 'Pelosi + 14% of Congress buying. AI chip tailwind.', followed: true,  owned: 2800,  alignment: 'aligned'  },
+  { ticker: 'MSFT', pct: 0.18, rationale: 'Crenshaw bought recently. Strong enterprise AI demand.', followed: false, owned: 0,     alignment: 'gap'      },
+  { ticker: 'AAPL', pct: 0.14, rationale: 'Bipartisan buying pattern. Modest add recommended.', followed: false, owned: 4200,  alignment: 'aligned'  },
+  { ticker: 'AMD',  pct: 0.12, rationale: '9 members bought in last 30 days. AI inference play alongside NVDA.', followed: false, owned: 0,    alignment: 'gap'      },
+  { ticker: 'GOOGL',pct: 0.10, rationale: 'Republican + Democrat overlap. Search + cloud AI moat.', followed: false, owned: 1100, alignment: 'aligned'  },
+  { ticker: 'META', pct: 0.09, rationale: 'Highest conviction buy in tech this quarter. Ad revenue momentum.', followed: false, owned: 0,    alignment: 'gap'      },
+  { ticker: 'AMZN', pct: 0.07, rationale: 'AWS demand driving 7 recent buys. Cloud infrastructure pick.', followed: false, owned: 3200, alignment: 'aligned'  },
+  { ticker: 'JPM',  pct: 0.04, rationale: 'Financial sector rotation — 5 members bought post rate decision.', followed: false, owned: 0,    alignment: 'gap'      },
+  { ticker: 'LLY',  pct: 0.02, rationale: 'GLP-1 tailwind. Healthcare committee members buying steadily.', followed: false, owned: 800,  alignment: 'aligned'  },
+  { ticker: 'UNH',  pct: 0.02, rationale: 'Defensive hold. 3 members added to existing positions.', followed: false, owned: 0,    alignment: 'gap'      },
 ]
 
 const DEFAULT_AMOUNT    = 150
 const QUICK_AMOUNTS     = [150, 250, 500, 1000]
 const MIN_AMOUNT        = 50
 const MAX_AMOUNT        = 10000
-const DEFAULT_PICK_COUNT = MOCK_PICKS.length  // defaults to available recommendations
+const DEFAULT_PICK_COUNT = 3  // sensible starting default
 const MAX_PICK_COUNT    = 30
 
 export function renderWhatToBuy(container) {
@@ -46,7 +53,7 @@ export function renderWhatToBuy(container) {
   })
   container.querySelector('#pick-increment').addEventListener('click', () => {
     const inp = container.querySelector('#pick-count-display')
-    const val = Math.min(MAX_PICK_COUNT, parseInt(inp.textContent, 10) + 1)
+    const val = Math.min(MOCK_PICKS.length, parseInt(inp.textContent, 10) + 1)
     inp.textContent = val
     _updatePicksBtn(container)
   })
@@ -164,7 +171,7 @@ function _renderStep1() {
                 color:var(--text-secondary);
                 font-size:20px; cursor:pointer;
               ">+</button>
-              <span style="font-size:12px; color:var(--text-tertiary); margin-left:var(--s2);">${MAX_PICK_COUNT} available</span>
+              <span style="font-size:12px; color:var(--text-tertiary); margin-left:var(--s2);">${MOCK_PICKS.length} available</span>
             </div>
           </div>
 
