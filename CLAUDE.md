@@ -265,10 +265,21 @@ Structured logger in `src/services/logger.js`. Levels: DEBUG, INFO, WARN, ERROR.
 | Sheets auto-create | ✅ Working | New spreadsheet created and saved to config if none exists |
 | Home → 4 tile routing | ✅ Working | What's New→feed, Top Signal→topSignal, Portfolio→positions, Buy→whatToBuy |
 | Back button navigation | ✅ Working | Header back button in all drill-down views |
-| What to Buy — Step 1 UI | ✅ Working | Amount input + pick count stepper (capped at available picks), pill quick-amounts |
-| What to Buy — Step 2 results | ✅ Working | Ranked picks with allocation, alignment indicator, summary table |
+| What to Buy — Step 1 UI | ✅ Working | Amount input + pick count stepper (capped at 29 available picks), pill quick-amounts |
+| What to Buy — Step 2 results | ✅ Working | Ranked picks with allocation, alignment indicator, summary table; 29 mock picks available |
 | Positions view | ✅ Working | Stats summary, position cards sorted by mkt value, mock fallback with banner |
-| CSV upload (Schwab transactions) | ✅ Working | Button→input.click() iOS fix, transactions format detected first, stock splits handled |
+| CSV upload — positions format | ✅ Working | Schwab positions export parsed via flexible colIdx map; mkt value, avg cost, G/L all captured |
+| CSV upload — transactions format | ✅ Working | Auto-detected by header; buy/sell aggregated into derived positions; stock splits handled |
+| CSV upload — iOS file picker | ✅ Working | Button→input.click() pattern; `<label>` alone not reliable on iOS WebKit |
+| CSV upload — format-aware toast | ✅ Working | "N positions loaded from positions export" vs "N positions derived from M transactions" |
+| Schwab positions flexible parsing | ✅ Working | `colIdx` map tolerates `Qty (Quantity)` and other column name variants across Schwab export versions |
+| CUSIP → ticker normalization | ✅ Working | `CUSIP_TO_TICKER` map in schwabParser converts 9-char CUSIPs (e.g. `33813J106` → `IAU`) |
+| Zero-quantity position filtering | ✅ Working | `< 0.001` threshold in both parser (`derivePositions`) and view layer (`renderPositions`) |
+| Stale data warning | ✅ Working | Orange warning shown when `last_csv_upload` is > 7 days old; suppressed for mock data |
+| Empty state in positions | ✅ Working | "No positions to display" message with upload hint shown when all positions filtered out |
+| Home portfolio card — live data | ✅ Working | Calls `getPositionsSummary()` — shows real account total, G/L%, position count, last upload date |
+| RAW Sheets writes | ✅ Working | All `appendRows`, `updateCell`, `writeConfigBatch` use `valueInputOption: 'RAW'` — no date serial bug |
+| `_parseDateField()` serial guard | ✅ Working | Reads numeric Sheets date serials and converts via Excel epoch; backward compat with old rows |
 | Top Signal view | ✅ Working | Mock consensus data, signal strength tiers |
 | Settings view | ✅ Working | Editable config keys, scrollable on mobile |
 | Feed view | ✅ Working | 3-state trade cards, follows/ignores, mock HSW data |
@@ -278,6 +289,9 @@ Structured logger in `src/services/logger.js`. Levels: DEBUG, INFO, WARN, ERROR.
 | Logger re-entrancy guard | ✅ Working | `_writing` flag prevents appendRows→debug→appendRows infinite recursion |
 | Playwright test suite | ✅ Working | 75 tests across all views; run with `npx playwright test` |
 | Reload view persistence | ✅ Working | sessionStorage `sth_last_view` restores active view on page reload |
+| Build stamp in header | ✅ Working | `__APP_BUILD__` injected at build time; shown in app header (e.g. `v0315.1402`) |
+| AI router | ✅ Working | `src/api/ai/index.js` routes to Gemini or Ollama based on `config.ai_provider` |
+| Seed watchlist | ✅ Working | `src/data/watchlist.js` seeds `watchlist` tab on first Sheets connect |
 
 ### Active
 | ID | Title | Priority | Status |
@@ -287,6 +301,12 @@ Structured logger in `src/services/logger.js`. Levels: DEBUG, INFO, WARN, ERROR.
 | BL-003 | What to Buy pick count selector (defaults to rec count, max available) | P1 | ✅ Shipped |
 | BL-004 | Top Signal view — stocks ranked by member trading activity | P1 | ✅ Shipped |
 | BL-005 | Home card routing + copy (Top Signal → topSignal, not whatToBuy) | P1 | ✅ Shipped |
+| BL-013 | Schwab positions CSV parsing (flexible colIdx, CUSIP normalization, zero-qty filter) | P0 | ✅ Shipped |
+| BL-014 | RAW Sheets writes + `_parseDateField()` serial guard | P0 | ✅ Shipped |
+| BL-025 | Home portfolio card wired to live `getPositionsSummary()` | P1 | ✅ Shipped |
+| BL-026 | Stale data warning (> 7 days) + empty state message in positions view | P1 | ✅ Shipped |
+| BL-027 | Format-aware upload toast (positions vs transactions) | P1 | ✅ Shipped |
+| BL-028 | 29-pick mock pool in What to Buy (expanded from 10) | P2 | ✅ Shipped |
 | BL-019 | Wire Feed view to real HSW congressional trades API | P0 | 🔲 Next |
 | BL-020 | Wire Top Signal to live `consensus` tab (replace mock) | P0 | 🔲 Next |
 | BL-021 | Wire What to Buy picks to live `recommendations` tab (replace mock) | P0 | 🔲 Next |
@@ -301,7 +321,7 @@ Structured logger in `src/services/logger.js`. Levels: DEBUG, INFO, WARN, ERROR.
 | BL-008 | Skeleton/loading states for all views | P2 | Positions already has skeleton |
 | BL-009 | localStorage cache for HSW → IndexedDB (quota + sync JSON.parse) | P2 | Prevents silent cache failures |
 | BL-010 | PARTY_ROSTER config-driven (party_roster_d/r keys in config tab) | P2 | |
-| BL-011 | Positions stale-data warning when last_csv_upload > N days | P2 | |
+| BL-011 | Positions stale-data warning when last_csv_upload > N days | P2 | ✅ Shipped as BL-026 |
 | BL-012 | Decisions history view | P2 | |
 | BL-015 | Persist HSW disclosures to `disclosures` tab | P3 | |
 | BL-016 | Remove unused chart.js or implement portfolio chart | P3 | |
