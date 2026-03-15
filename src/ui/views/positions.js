@@ -38,12 +38,6 @@ function _renderSkeleton() {
   const shimmer = `background: linear-gradient(90deg, var(--bg-raised) 25%, var(--bg-elevated) 50%, var(--bg-raised) 75%);
     background-size: 200% 100%; animation: shimmer 1.5s infinite;`
   return `
-    <style>
-      @keyframes shimmer {
-        0% { background-position: 200% 0; }
-        100% { background-position: -200% 0; }
-      }
-    </style>
     <div style="margin-bottom:var(--s5);">
       <div style="display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:var(--s4);">
         <div>
@@ -106,13 +100,14 @@ function _renderPositionCard(pos) {
 
 // ─── CSV upload handler ──────────────────────────────────────────────────────
 
-function _wireUpload(container) {
+function _wireUpload(container, signal) {
   const input = container.querySelector('#csv-upload')
   if (!input) return
+  const opts = signal ? { signal } : {}
 
   // <label> doesn't reliably trigger file picker on iOS WebKit — use button + .click()
   const btn = container.querySelector('#csv-upload-label')
-  if (btn) btn.addEventListener('click', () => input.click())
+  if (btn) btn.addEventListener('click', () => input.click(), opts)
 
   input.addEventListener('change', async (e) => {
     const file = e.target.files?.[0]
@@ -190,7 +185,7 @@ function _wireUpload(container) {
 
         const count = Object.keys(parsed).length
         showToast(`${count} positions loaded`, 'success')
-        await renderPositions(container)
+        if (!signal?.aborted && container.isConnected) await renderPositions(container, signal)
 
       } catch (err) {
         error(CAT, `CSV parse failed: ${err.message}`, err)
@@ -214,7 +209,7 @@ function _wireUpload(container) {
 
 // ─── Main render ─────────────────────────────────────────────────────────────
 
-export async function renderPositions(container) {
+export async function renderPositions(container, signal) {
   // Show loading skeleton immediately
   container.innerHTML = _renderSkeleton()
 
@@ -224,6 +219,9 @@ export async function renderPositions(container) {
   } catch (err) {
     warn(CAT, `loadPositions failed: ${err.message}`)
   }
+
+  // Guard: if navigated away during async load, don't overwrite the new view
+  if (signal?.aborted || !container.isConnected) return
 
   const positions = getPositions()
   const summary   = getPositionsSummary()
@@ -295,7 +293,7 @@ export async function renderPositions(container) {
   `
 
   // Wire CSV upload
-  _wireUpload(container)
+  _wireUpload(container, signal)
 
   info(CAT, `Rendered ${sortedPositions.length} positions (mock=${isMock})`)
 }

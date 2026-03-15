@@ -39,10 +39,16 @@ export function renderApp({ spreadsheetId }) {
   const backBtn     = document.getElementById('back-btn')
   const settingsBtn = document.getElementById('settings-btn')
   let   activeView  = null
+  let   _navAbort   = null  // AbortController for current navigation
 
   async function navigate(viewName) {
     if (viewName === activeView) return
     activeView = viewName
+
+    // Cancel any in-flight render + its event listeners from the previous view
+    if (_navAbort) _navAbort.abort()
+    _navAbort = new AbortController()
+    const { signal } = _navAbort
 
     info(CAT, `Navigate: ${viewName}`)
 
@@ -52,13 +58,14 @@ export function renderApp({ spreadsheetId }) {
     viewContent.innerHTML = ''
 
     try {
-      if      (viewName === 'home')      await renderHome(viewContent)
-      else if (viewName === 'feed')      await renderFeed(viewContent)
-      else if (viewName === 'positions') await renderPositions(viewContent)
-      else if (viewName === 'settings')  await renderSettings(viewContent)
-      else if (viewName === 'whatToBuy') await renderWhatToBuy(viewContent)
-      else if (viewName === 'topSignal') await renderTopSignal(viewContent)
+      if      (viewName === 'home')      await renderHome(viewContent, signal)
+      else if (viewName === 'feed')      await renderFeed(viewContent, signal)
+      else if (viewName === 'positions') await renderPositions(viewContent, signal)
+      else if (viewName === 'settings')  await renderSettings(viewContent, signal)
+      else if (viewName === 'whatToBuy') await renderWhatToBuy(viewContent, signal)
+      else if (viewName === 'topSignal') await renderTopSignal(viewContent, signal)
     } catch (e) {
+      if (e.name === 'AbortError') return  // navigation cancelled — ignore
       console.error('[APP] render error:', e)
       viewContent.innerHTML = `
         <div class="empty-state">

@@ -134,7 +134,7 @@ function _saveDecision(tradeId, decision) {
 
 // ─── Main render ─────────────────────────────────────────────────────────────
 
-export function renderFeed(container) {
+export function renderFeed(container, signal) {
   const trades    = MOCK_TRADES
   const decisions = _loadDecisions()
 
@@ -167,7 +167,7 @@ export function renderFeed(container) {
     }
   })
 
-  _attachHandlers(container, visibleTrades, decisions)
+  _attachHandlers(container, visibleTrades, decisions, signal)
 }
 
 function _applyFollowedUI(container, tradeId) {
@@ -187,9 +187,10 @@ function _applyFollowedUI(container, tradeId) {
 
 // ─── Interaction logic ────────────────────────────────────────────────────────
 
-function _attachHandlers(container, trades, decisions) {
+function _attachHandlers(container, trades, decisions, signal) {
   // Mirror localStorage into a live Map for this session
   const cardState = new Map(Object.entries(decisions))
+  const opts = signal ? { signal } : {}
 
   container.addEventListener('click', (e) => {
     // ── Follow button ────────────────────────────────────────────────────────
@@ -265,5 +266,5 @@ function _attachHandlers(container, trades, decisions) {
       }
       return
     }
-  })
+  }, opts)
 }

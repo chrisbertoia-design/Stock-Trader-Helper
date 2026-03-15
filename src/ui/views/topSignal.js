@@ -113,8 +113,8 @@ function _signalStrength(tier) {
   return              { label: 'Weak',      dots: '●○○', color: 'var(--text-tertiary)' }
 }
 
-export function renderTopSignal(container) {
-  _render(container)
+export function renderTopSignal(container, signal) {
+  _render(container, signal)
 }
 
 function _filterBtn(key, active, label, dataAttr) {
@@ -131,7 +131,8 @@ function _filterBtn(key, active, label, dataAttr) {
   >${label}</button>`
 }
 
-function _render(container) {
+function _render(container, signal) {
+  if (signal?.aborted) return
   const filtered = _applyFilter(MOCK_SIGNALS, _partyFilter, _actionFilter)
 
   container.innerHTML = `
@@ -180,26 +181,28 @@ function _render(container) {
     </div>
   `
 
+  const opts = signal ? { signal } : {}
+
   container.querySelector('#party-filters').addEventListener('click', (e) => {
     const btn = e.target.closest('[data-party]')
     if (!btn) return
     _partyFilter = btn.dataset.party
-    _render(container)
-  })
+    _render(container, signal)
+  }, opts)
 
   container.querySelector('#action-filters').addEventListener('click', (e) => {
     const btn = e.target.closest('[data-action]')
     if (!btn) return
     _actionFilter = btn.dataset.action
-    _render(container)
-  })
+    _render(container, signal)
+  }, opts)
 
   container.querySelector('#window-filters').addEventListener('click', (e) => {
     const btn = e.target.closest('[data-window]')
     if (!btn) return
     _activeWindow = btn.dataset.window
-    _render(container)
-  })
+    _render(container, signal)
+  }, opts)
 }
 
 function _applyFilter(signals, partyFilter, actionFilter) {

@@ -68,7 +68,7 @@ const SECTIONS = [
   }
 ]
 
-export async function renderSettings(container) {
+export async function renderSettings(container, signal) {
   const config = { ...MOCK_CONFIG }
 
   container.innerHTML = `
@@ -92,9 +92,10 @@ export async function renderSettings(container) {
   `
 
   // Save button — show Phase 2 toast
+  const opts = signal ? { signal } : {}
   document.getElementById('save-settings').addEventListener('click', () => {
     showToast('Settings save available in Phase 2')
-  })
+  }, opts)
 }
 
 function _renderSection(section, config) {
