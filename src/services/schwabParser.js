@@ -136,6 +136,19 @@ export function parsePositionsCsv(csvText) {
   if (headerIdx === -1) throw new Error('Could not find positions header row')
 
   const headers = _splitCsvLine(lines[headerIdx]).map(h => h.toLowerCase().replace(/[^a-z0-9]/g, '_'))
+
+  // Build flexible column index map — Schwab renames columns across export versions
+  const colIdx = {
+    symbol:    headers.findIndex(h => h === 'symbol'),
+    quantity:  headers.findIndex(h => h.includes('qty') || h.includes('quantity')),
+    price:     headers.findIndex(h => h === 'price'),
+    mkt_value: headers.findIndex(h => h.includes('market_value') || h.includes('mkt_value') || (h.includes('value') && !h.includes('day'))),
+    avg_cost:  headers.findIndex(h => h.includes('average_cost') || h.includes('cost_basis_per_share') || h.includes('avg_cost')),
+    gain_loss: headers.findIndex(h => (h.includes('gain') || h.includes('unrealized')) && !h.includes('pct') && !h.includes('percent') && !h.includes('_1')),
+    gl_pct:    headers.findIndex(h => (h.includes('gain') || h.includes('unrealized')) && (h.includes('pct') || h.includes('percent') || h.endsWith('_1'))),
+  }
+  debug(CAT, 'colIdx map', JSON.stringify(colIdx))
+
   const dataLines = lines.slice(headerIdx + 1)
   const positions = {}
 
@@ -143,21 +156,19 @@ export function parsePositionsCsv(csvText) {
     try {
       const cols = _splitCsvLine(line)
       if (cols.length < 3) continue
-      const row = {}
-      headers.forEach((h, i) => { row[h] = cols[i] || '' })
 
-      const sym = _normalizeTicker((row.symbol || '').replace(/"/g, '').trim().toUpperCase())
+      const sym = _normalizeTicker((colIdx.symbol >= 0 ? cols[colIdx.symbol] : '').replace(/"/g, '').trim().toUpperCase())
       if (!sym || sym === 'ACCOUNT') continue
 
       positions[sym] = {
-        ticker:         sym,
-        quantity:       _parseNum(row.quantity),
-        avg_cost:       _parseNum(row.average_cost || row.cost_basis_per_share || '0'),
-        mkt_value:      _parseNum(row.market_value),
-        gain_loss:      _parseNum(row.gain_loss_ || row['gain_loss_$'] || '0'),
-        gain_loss_pct:  _parseNum(row.gain_loss__1 || row['gain_loss_%'] || '0'),
+        ticker:          sym,
+        quantity:        _parseNum(colIdx.quantity  >= 0 ? cols[colIdx.quantity]  : '0'),
+        avg_cost:        _parseNum(colIdx.avg_cost  >= 0 ? cols[colIdx.avg_cost]  : '0'),
+        mkt_value:       _parseNum(colIdx.mkt_value >= 0 ? cols[colIdx.mkt_value] : '0'),
+        gain_loss:       _parseNum(colIdx.gain_loss >= 0 ? cols[colIdx.gain_loss] : '0'),
+        gain_loss_pct:   _parseNum(colIdx.gl_pct    >= 0 ? cols[colIdx.gl_pct]    : '0'),
         last_csv_upload: new Date().toISOString().slice(0, 10),
-        source:         'schwab_csv'
+        source:          'schwab_csv'
       }
     } catch (e) {
       warn(CAT, `Positions parse error on line: ${line.slice(0,60)}`, e.message)

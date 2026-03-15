@@ -16,6 +16,23 @@ let _loaded      = false
 let _loadInFlight = null  // dedup: concurrent callers share one Sheets request
 let _generation  = 0     // incremented by setPositions(); guards against stale async overwrites
 
+// ─── Date field helper ────────────────────────────────────────────────────────
+
+function _parseDateField(val) {
+  if (!val) return ''
+  // If it's already a valid ISO date string, return as-is
+  if (typeof val === 'string' && /^\d{4}-\d{2}-\d{2}/.test(val)) return val.slice(0, 10)
+  // If it's a number (Excel/Sheets serial), convert it
+  // Excel serial 1 = Jan 1, 1900. Sheets uses same system.
+  const n = Number(val)
+  if (!isNaN(n) && n > 40000 && n < 60000) {
+    // Convert serial to date: Excel epoch is Dec 30, 1899
+    const d = new Date((n - 25569) * 86400 * 1000)
+    return d.toISOString().slice(0, 10)
+  }
+  return String(val).slice(0, 10)
+}
+
 // ─── Normalize MOCK_POSITIONS to the store's canonical shape ─────────────────
 // MOCK_POSITIONS uses: qty, price, mkt_val, cost_basis, gl_pct
 // Store canonical:     quantity, avg_cost, mkt_value, gain_loss, gain_loss_pct
@@ -103,7 +120,7 @@ async function _doLoadPositions() {
         mkt_value:       parseFloat(row[3]) || 0,
         gain_loss:       parseFloat(row[4]) || 0,
         gain_loss_pct:   parseFloat(row[5]) || 0,
-        last_csv_upload: row[6] ?? '',
+        last_csv_upload: _parseDateField(row[6]),
         source:          row[7] ?? ''
       }
     }

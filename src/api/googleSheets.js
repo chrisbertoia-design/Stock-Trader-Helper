@@ -208,7 +208,7 @@ export async function writeConfigBatch(updates) {
 
   if (data.length > 0) {
     await _withRetry(() =>
-      _apiPost(`values:batchUpdate`, { valueInputOption: 'USER_ENTERED', data })
+      _apiPost(`values:batchUpdate`, { valueInputOption: 'RAW', data })
     )
   }
   if (newRows.length > 0) {
@@ -234,7 +234,7 @@ export async function appendRows(tabName, rows) {
   debug(CAT, `appendRows to ${tabName}`, { count: rows.length })
   await _withRetry(() =>
     _apiPost(
-      `values/${encodeURIComponent(tabName + '!A1')}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`,
+      `values/${encodeURIComponent(tabName + '!A1')}:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`,
       { values: rows }
     )
   )
@@ -244,7 +244,7 @@ export async function updateCell(a1, value) {
   debug(CAT, `updateCell ${a1} = ${value}`)
   await _withRetry(() =>
     _apiPut(
-      `values/${encodeURIComponent(a1)}?valueInputOption=USER_ENTERED`,
+      `values/${encodeURIComponent(a1)}?valueInputOption=RAW`,
       { values: [[value]] }
     )
   )
@@ -318,7 +318,7 @@ async function _ensureAllTabs() {
     await _withRetry(() =>
       _apiPost(
         `values:batchUpdate`,
-        { valueInputOption: 'USER_ENTERED', data }
+        { valueInputOption: 'RAW', data }
       ),
       2  // max 2 attempts on startup
     )
