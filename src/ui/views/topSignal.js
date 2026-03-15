@@ -83,6 +83,18 @@ const MOCK_SIGNALS = [
     lastTrade:   '8 days ago',
     topTrader:   'McCaul',
   },
+  {
+    ticker:      'WMT',
+    memberCount: 6,
+    partyD:      2,
+    partyR:      4,
+    buyCount:    2,
+    sellCount:   7,
+    tier:        2,
+    windowDays:  14,
+    lastTrade:   '3 days ago',
+    topTrader:   'Collins',
+  },
 ]
 
 const PARTY_FILTERS = [

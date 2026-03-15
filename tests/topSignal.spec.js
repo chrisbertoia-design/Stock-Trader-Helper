@@ -14,8 +14,8 @@ test.beforeEach(async ({ page }) => {
 
 // ─── Render ───────────────────────────────────────────────────────────────────
 
-test('shows 6 signal cards by default (all stocks)', async ({ page }) => {
-  await expect(page.locator('#signal-list .card')).toHaveCount(6)
+test('shows 7 signal cards by default (all stocks)', async ({ page }) => {
+  await expect(page.locator('#signal-list .card')).toHaveCount(7)
 })
 
 test('party, action, and window filter rows all visible', async ({ page }) => {
@@ -26,7 +26,7 @@ test('party, action, and window filter rows all visible', async ({ page }) => {
 
 test('Buy → button exists on each card', async ({ page }) => {
   const buyBtns = page.locator('#signal-list button', { hasText: 'Buy →' })
-  await expect(buyBtns).toHaveCount(6)
+  await expect(buyBtns).toHaveCount(7)
 })
 
 // ─── Party filter pills ───────────────────────────────────────────────────────
@@ -36,20 +36,20 @@ test('Dem pill filters to dem-majority stocks', async ({ page }) => {
   // NVDA(D11>R8), AAPL(D6>R4), META(D4>R2) = 3 dem-majority stocks
   const count = await page.locator('#signal-list .card').count()
   expect(count).toBeGreaterThan(0)
-  expect(count).toBeLessThan(6)
+  expect(count).toBeLessThan(7)
 })
 
 test('Rep pill filters to rep-majority stocks', async ({ page }) => {
   await page.locator('[data-party="R"]').click()
   const count = await page.locator('#signal-list .card').count()
   expect(count).toBeGreaterThan(0)
-  expect(count).toBeLessThan(6)
+  expect(count).toBeLessThan(7)
 })
 
-test('All pill after filter restores all 6 stocks', async ({ page }) => {
+test('All pill after filter restores all 7 stocks', async ({ page }) => {
   await page.locator('[data-party="D"]').click()
   await page.locator('[data-party="all"]').click()
-  await expect(page.locator('#signal-list .card')).toHaveCount(6)
+  await expect(page.locator('#signal-list .card')).toHaveCount(7)
 })
 
 test('[REGRESSION] Dem then Rep then All — each pill registers (no accumulation)', async ({ page }) => {
@@ -62,13 +62,13 @@ test('[REGRESSION] Dem then Rep then All — each pill registers (no accumulatio
 
   await page.locator('[data-party="all"]').click()
   // All must fully restore — listener accumulation would break this
-  await expect(page.locator('#signal-list .card')).toHaveCount(6)
+  await expect(page.locator('#signal-list .card')).toHaveCount(7)
 
-  // Each filtered state must be a proper subset (< 6), proving filters fired exactly once
+  // Each filtered state must be a proper subset (< 7), proving filters fired exactly once
   expect(demCount).toBeGreaterThan(0)
-  expect(demCount).toBeLessThan(6)
+  expect(demCount).toBeLessThan(7)
   expect(repCount).toBeGreaterThan(0)
-  expect(repCount).toBeLessThan(6)
+  expect(repCount).toBeLessThan(7)
 })
 
 test('[REGRESSION] rapid party pill taps — final state matches last tap', async ({ page }) => {
@@ -81,7 +81,7 @@ test('[REGRESSION] rapid party pill taps — final state matches last tap', asyn
   // Final state: Dem filter active
   const count = await page.locator('#signal-list .card').count()
   expect(count).toBeGreaterThan(0)
-  expect(count).toBeLessThan(6)
+  expect(count).toBeLessThan(7)
 })
 
 // ─── Action filter pills ──────────────────────────────────────────────────────
@@ -92,16 +92,19 @@ test('Buys pill filters to buy-majority stocks', async ({ page }) => {
   expect(count).toBeGreaterThan(0)
 })
 
-test('Sells pill filters to stocks with sells', async ({ page }) => {
+test('Sells pill filters to sell-majority stocks only', async ({ page }) => {
+  const allCount = await page.locator('#signal-list .card').count()
   await page.locator('[data-action="sell"]').click()
-  const count = await page.locator('#signal-list .card').count()
-  expect(count).toBeGreaterThan(0)
+  const sellCount = await page.locator('#signal-list .card').count()
+  // Should show only sell-majority stocks (fewer than all, at least 1)
+  expect(sellCount).toBeGreaterThan(0)
+  expect(sellCount).toBeLessThan(allCount)
 })
 
 test('All action pill restores full list', async ({ page }) => {
   await page.locator('[data-action="buy"]').click()
   await page.locator('[data-action="all"]').click()
-  await expect(page.locator('#signal-list .card')).toHaveCount(6)
+  await expect(page.locator('#signal-list .card')).toHaveCount(7)
 })
 
 test('[REGRESSION] action pills work after party pills (cross-filter)', async ({ page }) => {
@@ -113,7 +116,7 @@ test('[REGRESSION] action pills work after party pills (cross-filter)', async ({
   // Reset both
   await page.locator('[data-party="all"]').click()
   await page.locator('[data-action="all"]').click()
-  await expect(page.locator('#signal-list .card')).toHaveCount(6)
+  await expect(page.locator('#signal-list .card')).toHaveCount(7)
 })
 
 // ─── Window pills ─────────────────────────────────────────────────────────────
