@@ -1,8 +1,16 @@
 /**
  * Feed view — drill-down screen showing recent politician trade disclosures.
  * 3-state cards: collapsed → expanded → followed/ignored
- * Uses hardcoded mock data (Phase 3 will wire real HSW API).
+ * Loads live HSW congressional trades; falls back to MOCK_TRADES on error.
  */
+
+import { fetchAllTransactions, filterByWatchlist } from '../../api/houseStockWatcher.js'
+import { readTab } from '../../api/googleSheets.js'
+import { debug, warn } from '../../services/logger.js'
+import { showToast } from '../components/toast.js'
+import { WATCHLIST } from '../../data/watchlist.js'
+
+const CAT = 'FEED_VIEW'
 
 const MOCK_TRADES = [
   { id: '1', politician_name: 'Nancy Pelosi',    party: 'D', ticker: 'NVDA', action: 'buy',  amount_low: 250001,  amount_high: 500000,   transaction_date: '2026-03-11', disclosed_date: '2026-03-13' },
@@ -132,35 +140,106 @@ function _saveDecision(tradeId, decision) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(decisions))
 }
 
+// ─── Skeleton ────────────────────────────────────────────────────────────────
+
+function _renderSkeleton() {
+  const shimmer = `background: linear-gradient(90deg, var(--bg-raised) 25%, var(--bg-elevated) 50%, var(--bg-raised) 75%);
+    background-size: 200% 100%; animation: shimmer 1.5s infinite;`
+  return `
+    <div style="margin-bottom:var(--s5);">
+      <div style="font-size:18px;font-weight:600;color:var(--text-primary);letter-spacing:-0.01em;">Recent Trades</div>
+      <div style="font-size:12px;color:var(--text-secondary);margin-top:var(--s1);">Loading congressional trades…</div>
+    </div>
+    ${Array(6).fill('').map(() => `
+      <div class="card" style="padding:var(--s4);">
+        <div style="height:18px;width:65%;border-radius:var(--r2);${shimmer}"></div>
+        <div style="height:14px;width:45%;border-radius:var(--r2);margin-top:var(--s2);${shimmer}"></div>
+        <div style="height:13px;width:55%;border-radius:var(--r2);margin-top:var(--s2);${shimmer}"></div>
+      </div>
+    `).join('')}
+  `
+}
+
 // ─── Main render ─────────────────────────────────────────────────────────────
 
-export function renderFeed(container, signal) {
-  const trades    = MOCK_TRADES
-  const decisions = _loadDecisions()
+export async function renderFeed(container, signal) {
+  // Show skeleton immediately
+  container.innerHTML = _renderSkeleton()
 
-  // Filter out already-ignored trades
+  let trades = MOCK_TRADES
+  let usingMock = false
+
+  try {
+    debug(CAT, 'Fetching HSW transactions')
+    const allTransactions = await fetchAllTransactions()
+    debug(CAT, `HSW returned ${allTransactions.length} transactions`)
+
+    // Load active watchlist names — Sheets first, seed fallback
+    let watchlistNames = WATCHLIST.filter(w => w.active === 'Y').map(w => w.name)
+    try {
+      const rows = await readTab('watchlist')
+      const sheetsNames = rows.filter(r => r[8]?.toUpperCase() === 'Y').map(r => r[1]).filter(Boolean)
+      if (sheetsNames.length > 0) {
+        watchlistNames = sheetsNames
+        debug(CAT, `Watchlist from Sheets: ${watchlistNames.length} active members`)
+      } else {
+        debug(CAT, `Sheets watchlist empty — using seed (${watchlistNames.length} members)`)
+      }
+    } catch (wlErr) {
+      warn(CAT, `Watchlist load failed: ${wlErr.message} — using seed watchlist`)
+    }
+
+    // Filter to watchlist members, last 30 days
+    const filteredTrades = filterByWatchlist(allTransactions, watchlistNames, { daysBack: 30 })
+    debug(CAT, `Filtered to ${filteredTrades.length} trades in last 30 days`)
+
+    if (filteredTrades.length === 0) {
+      warn(CAT, 'No trades found for watchlist in past 30 days — using mock')
+      usingMock = true
+    } else {
+      trades = filteredTrades
+    }
+  } catch (err) {
+    warn(CAT, `HSW fetch failed: ${err.message} — using mock data`)
+    showToast('Could not load live trades — showing sample data', 'error')
+    usingMock = true
+  }
+
+  // Guard: navigated away during async load
+  if (signal?.aborted || !container.isConnected) return
+
+  const decisions = _loadDecisions()
   const visibleTrades = trades.filter(t => decisions[t.id] !== 'ignored')
 
-  // Page header
-  const headerHTML = `
-<div style="margin-bottom:var(--s5);">
-  <div style="font-size:18px;font-weight:600;color:var(--text-primary);letter-spacing:-0.01em;">Recent Trades</div>
-  <div style="font-size:12px;color:var(--text-secondary);margin-top:var(--s1);">${visibleTrades.length} trades &nbsp;·&nbsp; last 90 days</div>
-</div>
-`
+  const tradeCount = visibleTrades.length
+  const subtitle = usingMock
+    ? 'Sample data — connect Google to load live trades'
+    : `${tradeCount} disclosure${tradeCount !== 1 ? 's' : ''} · last 30 days`
 
   if (visibleTrades.length === 0) {
-    container.innerHTML = headerHTML + `
-<div class="empty-state">
-  <div class="empty-state-title">No trades to show</div>
-  <div class="empty-state-sub">No recent politician disclosures found.</div>
-</div>`
+    container.innerHTML = `
+      <div style="margin-bottom:var(--s5);">
+        <div style="font-size:18px;font-weight:600;color:var(--text-primary);letter-spacing:-0.01em;">Recent Trades</div>
+        <div style="font-size:12px;color:var(--text-secondary);margin-top:var(--s1);">${subtitle}</div>
+      </div>
+      <div style="padding:var(--s6) var(--s4);text-align:center;color:var(--text-tertiary);font-size:13px;line-height:1.6;">
+        No recent disclosures found for your watchlist.<br>
+        <span style="font-size:12px;">All trades may have been dismissed, or your watchlist may be empty.</span>
+      </div>
+    `
     return
   }
 
-  container.innerHTML = headerHTML + `<div id="feed-cards">${visibleTrades.map(_tradeCardHTML).join('')}</div>`
+  container.innerHTML = `
+    <div style="margin-bottom:var(--s5);">
+      <div style="font-size:18px;font-weight:600;color:var(--text-primary);letter-spacing:-0.01em;">Recent Trades</div>
+      <div style="font-size:12px;color:var(--text-secondary);margin-top:var(--s1);">${subtitle}</div>
+      ${usingMock ? `<div style="font-size:11px;color:var(--accent);margin-top:4px;">Using sample data — upload positions or connect Google to see live trades</div>` : ''}
+    </div>
+    <div id="feed-cards">${visibleTrades.map(_tradeCardHTML).join('')}</div>
+  `
 
-  // Restore followed state for any previously followed trades
+  // Restore followed state
   visibleTrades.forEach(trade => {
     if (decisions[trade.id] === 'followed') {
       _applyFollowedUI(container, trade.id)
