@@ -135,23 +135,24 @@ function _wireUpload(container) {
       let parsed = null
 
       try {
-        // Try positions export first
-        try {
-          parsed = parsePositionsCsv(csvText)
-          if (!parsed || Object.keys(parsed).length === 0) {
-            parsed = null
-            throw new Error('No positions found in positions CSV')
-          }
-          info(CAT, `Parsed positions CSV — ${Object.keys(parsed).length} tickers`)
-        } catch (posErr) {
-          // Fall back to transactions export
-          debug(CAT, `Positions parse failed (${posErr.message}), trying transactions format`)
+        // Detect format by header: transactions CSV starts with Date,Action,Symbol
+        const isTransactions = /date[",\s]+action[",\s]+symbol/i.test(csvText.slice(0, 500))
+
+        if (isTransactions) {
+          debug(CAT, 'Detected transactions CSV format')
           const transactions = parseTransactionsCsv(csvText)
           parsed = derivePositions(transactions)
           if (!parsed || Object.keys(parsed).length === 0) {
             throw new Error('No positions derived from transactions CSV')
           }
           info(CAT, `Derived ${Object.keys(parsed).length} positions from transactions CSV`)
+        } else {
+          debug(CAT, 'Detected positions CSV format')
+          parsed = parsePositionsCsv(csvText)
+          if (!parsed || Object.keys(parsed).length === 0) {
+            throw new Error('No positions found in positions CSV')
+          }
+          info(CAT, `Parsed positions CSV — ${Object.keys(parsed).length} tickers`)
         }
 
         // Update in-memory store

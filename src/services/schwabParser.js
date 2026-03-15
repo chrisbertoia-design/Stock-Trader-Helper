@@ -23,7 +23,8 @@ const POSITION_ACTIONS = new Set([
   'buy', 'sell',
   'reinvest sha', 'reinvest shares',
   'qual div reir', 'qualified dividend reinvestment',
-  'reinvest dividend'
+  'reinvest dividend',
+  'stock split'
 ])
 
 /**
@@ -74,9 +75,10 @@ export function derivePositions(transactions) {
       positions[sym] = { ticker: sym, quantity: 0, cost_basis: 0, tx_count: 0 }
     }
 
+    const isSplit = tx.action_normalized === 'stock split'
     const qty = tx.action_normalized === 'sell' ? -tx.quantity : tx.quantity
     positions[sym].quantity   += qty
-    positions[sym].cost_basis += tx.amount_abs
+    if (!isSplit) positions[sym].cost_basis += tx.amount_abs  // splits add shares at $0 cost
     positions[sym].tx_count   += 1
   }
 
