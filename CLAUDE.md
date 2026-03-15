@@ -159,10 +159,29 @@ Structured logger in `src/services/logger.js`. Levels: DEBUG, INFO, WARN, ERROR.
 - **Note**: iOS Chrome uses WebKit under the hood (Apple App Store rule) — same `<button>` tap-target rules apply as iOS Safari
 
 ## Known Backlog
-- **P2**: PARTY_ROSTER config-driven (party_roster_d/r keys in config tab)
-- **P2**: Positions stale-data warning when last_csv_upload > N days
-- **P2**: Decisions history view
-- **P3**: Persist HSW disclosures to `disclosures` tab
-- **P3**: Remove unused chart.js or implement portfolio chart
-- **Backlog**: Schwab CSV preview before commit
-- **Backlog**: PWA installable on mobile (GitHub Pages, not single HTML — OAuth requires https origin)
+
+### Active
+| ID | Title | Priority | Status |
+|----|-------|----------|--------|
+| BL-001 | Settings page fully visible on mobile (overflow-x fix + async/await) | P0 | ✅ Shipped |
+| BL-002 | Performance audit + optimization (Sheets init parallel, writeConfigKey batch, in-flight dedup, retry delay) | P2 | ✅ Shipped (P0/P1 items done; P2 items below) |
+| BL-003 | What to Buy pick count selector (defaults to rec count, max 30) | P1 | ✅ Shipped |
+| BL-004 | Top Signal view — stocks ranked by member trading activity | P1 | ✅ Shipped |
+| BL-005 | Home card routing + copy (Top Signal → topSignal, not whatToBuy) | P1 | ✅ Shipped |
+
+### Pending
+| ID | Title | Priority | Notes |
+|----|-------|----------|-------|
+| BL-006 | HSW JSON parse: move to Web Worker to unblock main thread on 30-50MB payload | P1 | Biggest perf win; needs Phase 3 wiring |
+| BL-007 | `readTab` unbounded A:ZZ range → use schema column bounds | P2 | Reduces Sheets read latency |
+| BL-008 | Skeleton/loading states for all views before Phase 3 API wiring | P2 | Prevents blank screen on real data fetches |
+| BL-009 | localStorage cache for HSW → IndexedDB (quota + sync JSON.parse) | P2 | Prevents silent cache failures + 50MB re-downloads |
+| BL-010 | PARTY_ROSTER config-driven (party_roster_d/r keys in config tab) | P2 | |
+| BL-011 | Positions stale-data warning when last_csv_upload > N days | P2 | |
+| BL-012 | Decisions history view | P2 | |
+| BL-013 | Pick count selector: wire to live `recommendations` tab (currently mock) | P2 | Needs Phase 3 |
+| BL-014 | Top Signal view: wire to live `consensus` tab (currently mock) | P2 | Needs Phase 3 |
+| BL-015 | Persist HSW disclosures to `disclosures` tab | P3 | |
+| BL-016 | Remove unused chart.js or implement portfolio chart | P3 | |
+| BL-017 | Schwab CSV preview before commit | Backlog | |
+| BL-018 | PWA installable on mobile (GitHub Pages, OAuth requires https origin) | Backlog | |
