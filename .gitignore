@@ -26,3 +26,7 @@ Thumbs.db
 
 # Debug artifacts
 congressional_trading_coordination_analysis.json
+
+# Playwright
+test-results/
+playwright-report/
