@@ -42,6 +42,22 @@ Always write terminal blocks as `cd ~/Stock-Trader-Helper` — user closes and r
 `~` works universally regardless of home directory. Full paths are fragile and harder to read.
 **Reuse**: every terminal block in every response.
 
+## 2026-03-15 | iOS file input: button + input.click(), never label wrapping input
+`<label>` wrapping `<input type="file" style="display:none">` does NOT reliably open the file picker
+on iOS Chrome/WebKit. Replace with `<button>` that calls `input.click()` programmatically via JS.
+Same rule applies to all interactive elements — always `<button>`, never `<div onclick>` or `<label>`.
+**Reuse**: every file upload trigger on this project.
+
+## 2026-03-15 | Schwab CSV format detection — check header pattern before parsing
+Schwab transactions CSV has `Symbol` AND `Quantity` columns, so `parsePositionsCsv` (which detects by
+`/symbol/i && /quantity/i`) incorrectly matches it and returns all-zero data. Always detect format
+upfront by checking for `Date,Action,Symbol` (transactions-specific) before falling back to positions.
+**Reuse**: any multi-format CSV parser — detect by the most specific header pattern first.
+
+## 2026-03-15 | Google OAuth + Sheets confirmed working end-to-end
+GIS implicit flow, silent refresh at 50min, spreadsheet auto-create, all 9 tabs provisioned,
+batchGet/batchUpdate wired. This is stable — don't touch auth or Sheets init without good reason.
+
 ## 2026-03-14 | AbortController timeouts on all fetches
 `_timedFetch()` (10s Sheets) and HSW fetch (15s) use AbortController to prevent hung connections.
 Avoids UI lockups when network is slow or S3/Sheets is unresponsive.

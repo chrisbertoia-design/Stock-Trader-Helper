@@ -160,27 +160,48 @@ Structured logger in `src/services/logger.js`. Levels: DEBUG, INFO, WARN, ERROR.
 
 ## Known Backlog
 
+## Confirmed Working (do not regress)
+| Feature | Status | Notes |
+|---------|--------|-------|
+| Google OAuth (GIS implicit flow) | ✅ Working | One-button sign-in, silent refresh at 50min, token in localStorage `sth_auth` |
+| Google Sheets read/write | ✅ Working | batchGet/batchUpdate, all 9 tabs auto-provisioned on first connect |
+| Sheets auto-create | ✅ Working | New spreadsheet created and saved to config if none exists |
+| Home → 4 tile routing | ✅ Working | What's New→feed, Top Signal→topSignal, Portfolio→positions, Buy→whatToBuy |
+| Back button navigation | ✅ Working | Header back button in all drill-down views |
+| What to Buy — Step 1 UI | ✅ Working | Amount input + pick count stepper (capped at available picks), pill quick-amounts |
+| What to Buy — Step 2 results | ✅ Working | Ranked picks with allocation, alignment indicator, summary table |
+| Positions view | ✅ Working | Stats summary, position cards sorted by mkt value, mock fallback with banner |
+| CSV upload (Schwab transactions) | ✅ Working | Button→input.click() iOS fix, transactions format detected first, stock splits handled |
+| Top Signal view | ✅ Working | Mock consensus data, signal strength tiers |
+| Settings view | ✅ Working | Editable config keys, scrollable on mobile |
+| Feed view | ✅ Working | 3-state trade cards, follows/ignores, mock HSW data |
+| Toast notifications | ✅ Working | Success/error/info, auto-dismiss |
+| Structured logging | ✅ Working | Flushes to Sheets `log` tab when connected, console fallback |
+
 ### Active
 | ID | Title | Priority | Status |
 |----|-------|----------|--------|
 | BL-001 | Settings page fully visible on mobile (overflow-x fix + async/await) | P0 | ✅ Shipped |
-| BL-002 | Performance audit + optimization (Sheets init parallel, writeConfigKey batch, in-flight dedup, retry delay) | P2 | ✅ Shipped (P0/P1 items done; P2 items below) |
-| BL-003 | What to Buy pick count selector (defaults to rec count, max 30) | P1 | ✅ Shipped |
+| BL-002 | Performance audit + optimization (Sheets init parallel, writeConfigKey batch, in-flight dedup, retry delay) | P2 | ✅ Shipped |
+| BL-003 | What to Buy pick count selector (defaults to rec count, max available) | P1 | ✅ Shipped |
 | BL-004 | Top Signal view — stocks ranked by member trading activity | P1 | ✅ Shipped |
 | BL-005 | Home card routing + copy (Top Signal → topSignal, not whatToBuy) | P1 | ✅ Shipped |
+| BL-019 | Wire Feed view to real HSW congressional trades API | P0 | 🔲 Next |
+| BL-020 | Wire Top Signal to live `consensus` tab (replace mock) | P0 | 🔲 Next |
+| BL-021 | Wire What to Buy picks to live `recommendations` tab (replace mock) | P0 | 🔲 Next |
+| BL-022 | AI: Gemini wiring for follow/ignore modal recommendations | P1 | 🔲 Next |
+| BL-023 | AI: What to Buy ranked picks with Gemini rationale | P1 | 🔲 Next |
 
 ### Pending
 | ID | Title | Priority | Notes |
 |----|-------|----------|-------|
-| BL-006 | HSW JSON parse: move to Web Worker to unblock main thread on 30-50MB payload | P1 | Biggest perf win; needs Phase 3 wiring |
+| BL-006 | HSW JSON parse: move to Web Worker to unblock main thread on 30-50MB payload | P1 | Biggest perf win |
 | BL-007 | `readTab` unbounded A:ZZ range → use schema column bounds | P2 | Reduces Sheets read latency |
-| BL-008 | Skeleton/loading states for all views before Phase 3 API wiring | P2 | Prevents blank screen on real data fetches |
-| BL-009 | localStorage cache for HSW → IndexedDB (quota + sync JSON.parse) | P2 | Prevents silent cache failures + 50MB re-downloads |
+| BL-008 | Skeleton/loading states for all views | P2 | Positions already has skeleton |
+| BL-009 | localStorage cache for HSW → IndexedDB (quota + sync JSON.parse) | P2 | Prevents silent cache failures |
 | BL-010 | PARTY_ROSTER config-driven (party_roster_d/r keys in config tab) | P2 | |
 | BL-011 | Positions stale-data warning when last_csv_upload > N days | P2 | |
 | BL-012 | Decisions history view | P2 | |
-| BL-013 | Pick count selector: wire to live `recommendations` tab (currently mock) | P2 | Needs Phase 3 |
-| BL-014 | Top Signal view: wire to live `consensus` tab (currently mock) | P2 | Needs Phase 3 |
 | BL-015 | Persist HSW disclosures to `disclosures` tab | P3 | |
 | BL-016 | Remove unused chart.js or implement portfolio chart | P3 | |
 | BL-017 | Schwab CSV preview before commit | Backlog | |
