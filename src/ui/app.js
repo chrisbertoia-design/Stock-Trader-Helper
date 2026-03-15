@@ -23,6 +23,7 @@ export function renderApp({ spreadsheetId }) {
         <div class="header-left">
           <button class="back-btn hidden" id="back-btn" aria-label="Back">←</button>
           <span class="app-wordmark">STH</span>
+          <span style="font-size:10px; color:var(--text-tertiary); font-family:var(--font-mono); margin-left:var(--s2); letter-spacing:0.03em;">${__APP_BUILD__}</span>
         </div>
         <div class="header-right">
           <div id="sync-status" class="sync-dot"></div>

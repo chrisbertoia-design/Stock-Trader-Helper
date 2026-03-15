@@ -1,7 +1,17 @@
 import { defineConfig } from 'vite'
 import { VitePWA } from 'vite-plugin-pwa'
 
+const buildDate = new Date()
+const buildStamp = 'v' +
+  String(buildDate.getUTCMonth() + 1).padStart(2, '0') +
+  String(buildDate.getUTCDate()).padStart(2, '0') + '.' +
+  String(buildDate.getUTCHours()).padStart(2, '0') +
+  String(buildDate.getUTCMinutes()).padStart(2, '0')
+
 export default defineConfig({
+  define: {
+    __APP_BUILD__: JSON.stringify(buildStamp)
+  },
   base: '/Stock-Trader-Helper/',
   server: {
     port: 5175,
