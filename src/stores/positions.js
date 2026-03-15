@@ -14,6 +14,7 @@ const CAT = 'POSITIONS_STORE'
 let _positions   = null
 let _loaded      = false
 let _loadInFlight = null  // dedup: concurrent callers share one Sheets request
+let _generation  = 0     // incremented by setPositions(); guards against stale async overwrites
 
 // ─── Normalize MOCK_POSITIONS to the store's canonical shape ─────────────────
 // MOCK_POSITIONS uses: qty, price, mkt_val, cost_basis, gl_pct
@@ -63,16 +64,25 @@ export function loadPositions() {
 
 async function _doLoadPositions() {
   debug(CAT, '_doLoadPositions()')
+  const myGen = _generation  // snapshot generation — if setPositions() is called during fetch, we bail
 
   if (!getSpreadsheetId()) {
     warn(CAT, 'No spreadsheetId — using MOCK_POSITIONS')
-    _positions = _normalizeMock()
-    _loaded    = true
-    return _positions
+    if (_generation === myGen) {
+      _positions = _normalizeMock()
+      _loaded    = true
+    }
+    return _positions ?? _normalizeMock()
   }
 
   try {
     const rows = await readTab('my_positions')
+
+    // If setPositions() was called while we were fetching, our data is stale — don't overwrite
+    if (_generation !== myGen) {
+      debug(CAT, '_doLoadPositions() discarding stale fetch — setPositions() was called during load')
+      return _positions
+    }
 
     if (!rows.length) {
       warn(CAT, 'my_positions tab is empty — using MOCK_POSITIONS')
@@ -105,9 +115,11 @@ async function _doLoadPositions() {
 
   } catch (e) {
     warn(CAT, `loadPositions failed (${e.message}) — using MOCK_POSITIONS`)
-    _positions = _normalizeMock()
-    _loaded    = true
-    return _positions
+    if (_generation === myGen) {
+      _positions = _normalizeMock()
+      _loaded    = true
+    }
+    return _positions ?? _normalizeMock()
   }
 }
 
@@ -129,8 +141,17 @@ export function getPositions() {
  */
 export function setPositions(obj) {
   debug(CAT, `setPositions() — ${Object.keys(obj).length} tickers`)
+  _generation++          // invalidate any in-flight _doLoadPositions() fetch
   _positions = obj
   _loaded    = true
+}
+
+/**
+ * Mark cache as stale so next loadPositions() re-reads from Sheets.
+ * Does NOT clear _positions — callers can still use getPositions() while refresh is in flight.
+ */
+export function invalidatePositionsCache() {
+  _loaded = false
 }
 
 /**

@@ -3,7 +3,7 @@
  * CSV upload parses Schwab exports and writes to Google Sheets my_positions tab.
  */
 
-import { loadPositions, getPositions, getPositionsSummary, setPositions } from '../../stores/positions.js'
+import { loadPositions, getPositions, getPositionsSummary, setPositions, invalidatePositionsCache } from '../../stores/positions.js'
 import { parsePositionsCsv, parseTransactionsCsv, derivePositions }      from '../../services/schwabParser.js'
 import { clearTab, appendRows, getSpreadsheetId }                        from '../../api/googleSheets.js'
 import { debug, info, warn, error }                                      from '../../services/logger.js'
@@ -194,7 +194,10 @@ function _wireUpload(container, signal) {
 
         const count = Object.keys(parsed).length
         showToast(`${count} positions loaded`, 'success')
-        if (!signal?.aborted && container.isConnected) await renderPositions(container, signal)
+        // skipLoad:true — data is already fresh in memory from setPositions() above.
+        // invalidatePositionsCache so the *next* navigation re-reads from Sheets.
+        invalidatePositionsCache()
+        if (!signal?.aborted && container.isConnected) await renderPositions(container, signal, { skipLoad: true })
         if (signal?.aborted || !container.isConnected) return
 
       } catch (err) {
@@ -221,15 +224,17 @@ function _wireUpload(container, signal) {
 
 // ─── Main render ─────────────────────────────────────────────────────────────
 
-export async function renderPositions(container, signal) {
-  // Show loading skeleton immediately
-  container.innerHTML = _renderSkeleton()
+export async function renderPositions(container, signal, { skipLoad = false } = {}) {
+  // Show loading skeleton only when doing a fresh load (not a post-upload re-render)
+  if (!skipLoad) container.innerHTML = _renderSkeleton()
 
-  // Load positions (from Sheets or mock fallback)
-  try {
-    await loadPositions()
-  } catch (err) {
-    warn(CAT, `loadPositions failed: ${err.message}`)
+  // Load positions (from Sheets or mock fallback) — skipped after CSV upload since data is fresh in memory
+  if (!skipLoad) {
+    try {
+      await loadPositions()
+    } catch (err) {
+      warn(CAT, `loadPositions failed: ${err.message}`)
+    }
   }
 
   // Guard: if navigated away during async load, don't overwrite the new view
