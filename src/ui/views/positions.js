@@ -120,14 +120,16 @@ function _wireUpload(container) {
 
     debug(CAT, `CSV file selected: ${file.name} (${file.size} bytes)`)
 
-    // Show parsing state
-    const uploadLabel = container.querySelector('#csv-upload-label')
-    const originalText = uploadLabel?.childNodes?.[0]?.textContent
-    if (uploadLabel) {
-      uploadLabel.childNodes[0].textContent = 'Parsing CSV...'
-      uploadLabel.style.pointerEvents = 'none'
-      uploadLabel.style.opacity = '0.5'
+    const uploadBtn = container.querySelector('#csv-upload-label')
+
+    const _setBtnState = (text, disabled) => {
+      if (!uploadBtn) return
+      uploadBtn.textContent = text
+      uploadBtn.disabled = disabled
+      uploadBtn.style.opacity = disabled ? '0.5' : ''
     }
+
+    _setBtnState('Parsing…', true)
 
     const reader = new FileReader()
     reader.onload = async (ev) => {
@@ -135,12 +137,17 @@ function _wireUpload(container) {
       let parsed = null
 
       try {
+        // Yield to browser so "Parsing…" label renders before heavy parse
+        await new Promise(r => setTimeout(r, 30))
+
         // Detect format by header: transactions CSV starts with Date,Action,Symbol
         const isTransactions = /date[",\s]+action[",\s]+symbol/i.test(csvText.slice(0, 500))
 
         if (isTransactions) {
           debug(CAT, 'Detected transactions CSV format')
           const transactions = parseTransactionsCsv(csvText)
+          // Yield again after heavy parse
+          await new Promise(r => setTimeout(r, 0))
           parsed = derivePositions(transactions)
           if (!parsed || Object.keys(parsed).length === 0) {
             throw new Error('No positions derived from transactions CSV')
@@ -161,6 +168,7 @@ function _wireUpload(container) {
         // Persist to Sheets if connected
         if (getSpreadsheetId()) {
           try {
+            _setBtnState('Saving…', true)
             await clearTab('my_positions')
             const rows = Object.values(parsed).map(p => [
               p.ticker,
@@ -176,42 +184,27 @@ function _wireUpload(container) {
             info(CAT, `Wrote ${rows.length} positions to Sheets my_positions tab`)
           } catch (sheetsErr) {
             warn(CAT, `Sheets write failed (${sheetsErr.message}) — positions updated in-memory only`)
-            showToast('Positions loaded but Sheets save failed — will retry next time')
+            showToast('Positions loaded but Sheets save failed')
           }
-        } else {
-          debug(CAT, 'No spreadsheetId — skipping Sheets write')
         }
 
         const count = Object.keys(parsed).length
-        showToast(`Positions updated — ${count} tickers loaded`, 'success')
-
-        // Re-render the view with new data
+        showToast(`${count} positions loaded`, 'success')
         await renderPositions(container)
 
       } catch (err) {
         error(CAT, `CSV parse failed: ${err.message}`, err)
-        showToast('Could not parse CSV — try a Schwab positions export', 'error')
-
-        // Restore upload button
-        if (uploadLabel) {
-          uploadLabel.childNodes[0].textContent = originalText || 'Upload CSV'
-          uploadLabel.style.pointerEvents = ''
-          uploadLabel.style.opacity = ''
-        }
+        showToast('Could not parse CSV — use a Schwab transactions export', 'error')
+        _setBtnState('Upload CSV', false)
       }
 
-      // Reset the input so the same file can be selected again
       input.value = ''
     }
 
     reader.onerror = () => {
       error(CAT, 'FileReader error reading CSV')
       showToast('Could not read file', 'error')
-      if (uploadLabel) {
-        uploadLabel.childNodes[0].textContent = originalText || 'Upload CSV'
-        uploadLabel.style.pointerEvents = ''
-        uploadLabel.style.opacity = ''
-      }
+      _setBtnState('Upload CSV', false)
       input.value = ''
     }
 
