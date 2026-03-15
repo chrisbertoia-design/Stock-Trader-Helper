@@ -38,7 +38,7 @@ function _getMockSummary() {
   }
 }
 
-export async function renderPositions(container) {
+export function renderPositions(container) {
   const positions = MOCK_POSITIONS
   const summary   = _getMockSummary()
 
@@ -111,13 +111,13 @@ function _renderPositionRow(pos) {
           <span style="font-size:12px; color:var(--text-tertiary); margin-left:var(--s2);">${qty} shares</span>
         </div>
         <div style="text-align:right;">
-          <div style="font-size:14px; font-weight:500;">${mktVal ? '$' + mktVal.toFixed(2) : '—'}</div>
+          <div style="font-size:14px; font-weight:500;">${mktVal ? '$' + mktVal.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2}) : '—'}</div>
           ${glPct !== 0 ? `<div style="font-size:11px; color:${glPos ? 'var(--buy)' : 'var(--sell)'}">
-            ${glPos ? '+' : ''}${glPct.toFixed(2)}
+            ${glPos ? '+' : ''}${glPct.toFixed(2)}%
           </div>` : ''}
         </div>
       </div>
-      ${pos.avg_cost ? `<div style="font-size:11px; color:var(--text-tertiary); margin-top:4px;">avg cost $${pos.avg_cost.toFixed(2)}</div>` : ''}
+      ${pos.avg_cost ? `<div style="font-size:11px; color:var(--text-tertiary); margin-top:4px;">avg cost $${pos.avg_cost.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2})}</div>` : ''}
     </div>
   `
 }
