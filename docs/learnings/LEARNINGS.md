@@ -2,7 +2,7 @@
 
 Consolidated from `good.md` and `bad.md` at milestones. Keep lean — remove resolved/superseded entries.
 
-<!-- Last consolidated: 2026-03-14 (project init) -->
+<!-- Last consolidated: 2026-03-15 -->
 
 ## Architecture Principles (Hard-Won)
 
@@ -15,6 +15,12 @@ Consolidated from `good.md` and `bad.md` at milestones. Keep lean — remove res
 | 5 | Never store `raw_json` on normalized records. Memory + localStorage quota killer. | bad: tab crash |
 | 6 | CORS on localhost → Vite proxy. Keep direct URL in prod. Use `import.meta.env.DEV`. | bad: CORS |
 | 7 | HSW data: trim to 90 days immediately after parse. 10k+ records → ~500. | bad: Chrome kill |
+| 8 | Always `valueInputOption: 'RAW'` for Sheets writes. `USER_ENTERED` mangles dates silently. | bad: date serials |
+| 9 | Verify S3 bucket region in production URLs. Wrong region → 403, not 404. Easy to misdiagnose. | bad: HSW S3 region |
+| 10 | Test `route.abort()` masks real API failures. Mock-fallback views need "banner absent" assertions. | bad: test isolation |
+| 11 | Multi-format CSV: detect by most specific header first, then fall back to general parser. | good: Schwab format detection |
+| 12 | Always `<button>` for mobile taps. `<div onclick>` and `<label>` fail on iOS WebKit. | good: iOS file input |
+| 13 | Logger re-entrancy guard: any module that logs from its own write path needs a `_writing` flag. | good: logger guard |
 
 ## Reusable Patterns
 
