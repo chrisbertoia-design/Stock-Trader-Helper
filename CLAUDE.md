@@ -19,16 +19,24 @@ src/
   api/
     googleSheets.js        # All Sheets API calls — batchGet, batchUpdate, clearTab, writeConfigBatch
     houseStockWatcher.js   # HSW fetch, normalize, consensus signals, 90-day trim, CORS proxy in dev
+    ai/
+      index.js             # AI router — model-agnostic, delegates to gemini or ollama by config
+      gemini.js            # Gemini API client (production)
+      ollama.js            # Ollama client (local dev fallback)
   data/
-    mockPositions.js       # Sample positions for offline/unauthenticated dev
-    sp500.js               # S&P 500 ticker set
+    mockPositions.js       # Real Schwab account snapshot used as mock (Joint Tenant ...805, 03/14/2026)
+    watchlist.js           # Seed watchlist — politicians to track, seeded to Sheets `watchlist` tab
+    test-fixtures/
+      schwab-positions-sample.csv   # Schwab positions CSV sample for Playwright upload tests
   services/
     logger.js              # Structured logger — DEBUG/INFO/WARN/ERROR, flushes to Sheets log tab
     schwabParser.js        # Parse Schwab positions CSV + transactions CSV → canonical position shape
-    aiService.js           # Gemini (prod) / Ollama (local) AI inference
+    sp500.js               # S&P 500 ticker set (moved from data/ to services/)
   stores/
     config.js              # Config store — reads/writes Sheets `config` tab, single source of truth
     positions.js           # Positions store — reads/writes `my_positions` tab, in-flight dedup
+  styles/
+    main.css               # craft.do dark design system — CSS variables, card, stat-row, btn, toast
   ui/
     app.js                 # App shell — home-first drill-down routing, navigate(viewName) pattern
     components/
@@ -41,19 +49,32 @@ src/
       whatToBuy.js         # What to Buy — $X input + ranked mock slice picks with alignment indicator
       followModal.js       # AI follow/ignore decision modal
       settings.js          # Settings view — editable config keys
-styles/
-  main.css                 # craft.do dark design system — CSS variables, card, stat-row, btn, toast
+      topSignal.js         # Top Signal view — mock consensus data, signal strength tiers
+  main.js                  # Entry point — Google OAuth boot, renderApp() dispatch
 docs/
   learnings/
     good.md
     bad.md
     LEARNINGS.md
+  evals/
+    ui-click-paths.md      # Canonical manual QA checklist — run on iOS Chrome before every release
+tests/
+  navigation.spec.js       # Playwright — routing, back button, reload persistence
+  positions.spec.js        # Playwright — CSV upload, stats, position cards
+  feed.spec.js             # Playwright — trade cards, expand/collapse, follow/ignore
+  whatToBuy.spec.js        # Playwright — amount input, stepper, step 1→2 flow
+  topSignal.spec.js        # Playwright — signal tiers, filter pills
+  settings.spec.js         # Playwright — editable config fields
+  debug.spec.js            # Playwright — dev/debug helpers
+  helpers/
+    auth.js                # Shared Playwright auth helpers (localStorage token injection)
+playwright.config.js       # Playwright config — port 5175, baseURL, chromium
 vite.config.js             # Port 5175, /api/hsw proxy (dev CORS fix), VitePWA, base /Stock-Trader-Helper/
 .env.local                 # VITE_GEMINI_API_KEY, VITE_AI_PROVIDER, VITE_GOOGLE_CLIENT_ID
 ```
 
 ## Key Architecture Decisions
-- **Navigation**: Home dashboard + drill-down. `navigate(viewName)` in `app.js`. Back button in header. All views receive `(container, { navigate })`. `window._navigate` exposed globally.
+- **Navigation**: Home dashboard + drill-down. `navigate(viewName)` in `app.js`. Back button in header. All views receive `(container, signal)`. `window._navigate` exposed globally.
 - **UI-first build order**: All views use hardcoded mock data in Phase 1. Real API wiring happens in Phase 3. Never import from stores/api in views during UI build phase.
 - **Async render pattern**: `navigate()` must `await` async render calls or errors silently escape the try/catch. Always wrap render dispatch in `async/await`.
 - **Non-blocking boot**: `renderApp()` fires immediately after auth check. Sheets init runs in background `_connectSheets()`. App never shows a loading screen after auth.
@@ -63,6 +84,14 @@ vite.config.js             # Port 5175, /api/hsw proxy (dev CORS fix), VitePWA, 
 - **CORS fix (dev only)**: Vite proxies `/api/hsw` → S3. Production uses direct S3 URL. `import.meta.env.DEV` switches the URL.
 - **CSV upload replace-not-append**: `clearTab('my_positions')` before `appendRows` on every CSV upload.
 - **Token age**: Tokens expire at 60min. Silent refresh triggered at 50min. Hard auth errors (401/403) clear `sth_auth` from localStorage.
+- **RAW valueInputOption for all Sheets writes**: Every `appendRows`, `updateCell`, and `writeConfigBatch` call uses `valueInputOption: 'RAW'`. Prevents Sheets from interpreting ISO date strings as date serials (the old USER_ENTERED bug that turned `2026-03-14` into a numeric serial on write).
+- **`_parseDateField()` serial guard on read**: `stores/positions.js` detects numeric date serials (range 40000–60000) on read from Sheets and converts them via the Excel epoch offset `(n - 25569) * 86400 * 1000`. Ensures backward compat with any rows written before the RAW fix.
+- **Flexible column matching in `parsePositionsCsv`**: `colIdx` map uses `h.includes('qty') || h.includes('quantity')` etc. rather than exact header string matching. Tolerates Schwab export variants (e.g. `Qty (Quantity)` vs `Quantity`).
+- **CUSIP_TO_TICKER normalization in schwabParser**: 9-character all-caps alphanumeric symbols are treated as CUSIPs and mapped to tickers (e.g. `33813J106` → `IAU`). Handles Schwab's ETF fractional share representation in transaction history.
+- **Positions snapshot CSV as primary upload path**: Positions export (Symbol/Quantity/Market Value columns) is the preferred upload; transactions CSV is supported as a fallback that derives positions by aggregating buy/sell history.
+- **Zero-qty filter at 0.001 threshold**: Applied in both `derivePositions()` (parser) and in `renderPositions()` view layer. Removes fully-sold positions (transactions residuals) from both storage and display.
+- **Build stamp in header**: `vite.config.js` injects `__APP_BUILD__` (e.g. `v0315.1402`) as a version indicator shown in the app header, derived at build time from UTC date/time.
+- **AI router pattern**: `src/api/ai/index.js` is the single import point for all AI calls. Routes to `gemini.js` (production) or `ollama.js` (local) based on `config.ai_provider`. Views never import provider modules directly.
 
 ## Google Sheets Schema
 | Tab | Columns |
