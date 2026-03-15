@@ -111,61 +111,60 @@ function _renderStep1() {
         <div style="margin-bottom:var(--s5);">
           <h2 style="font-size:15px; font-weight:500; margin-bottom:var(--s4); color:var(--text-primary);">How much are you investing?</h2>
 
-          <!-- Amount + pick count row -->
-          <div style="display:flex; align-items:center; gap:var(--s3); margin-bottom:var(--s4);">
-            <!-- Dollar amount -->
-            <div style="display:flex; align-items:center; flex:1;">
-              <span style="font-size:18px; color:var(--text-secondary); margin-right:var(--s2);">$</span>
-              <input
-                id="amount-input"
-                type="number"
-                value="${DEFAULT_AMOUNT}"
-                placeholder="${DEFAULT_AMOUNT}"
-                style="
-                  flex:1;
-                  background:var(--bg-primary);
-                  border:1px solid var(--border-soft);
-                  border-radius:var(--r2);
-                  padding:var(--s3) var(--s4);
-                  font-size:18px;
-                  color:var(--text-primary);
-                  font-family:var(--font-mono);
-                  transition:border-color var(--fast) var(--ease);
-                "
-                onfocus="this.style.borderColor='var(--accent)'"
-                onblur="this.style.borderColor='var(--border-soft)'"
-              />
-            </div>
+          <!-- Amount input row -->
+          <div style="display:flex; align-items:center; gap:var(--s2); margin-bottom:var(--s3);">
+            <span style="font-size:18px; color:var(--text-secondary);">$</span>
+            <input
+              id="amount-input"
+              type="number"
+              value="${DEFAULT_AMOUNT}"
+              placeholder="${DEFAULT_AMOUNT}"
+              style="
+                flex:1;
+                min-width:0;
+                background:var(--bg-primary);
+                border:1px solid var(--border-soft);
+                border-radius:var(--r2);
+                padding:var(--s3) var(--s4);
+                font-size:18px;
+                color:var(--text-primary);
+                font-family:var(--font-mono);
+                transition:border-color var(--fast) var(--ease);
+              "
+              onfocus="this.style.borderColor='var(--accent)'"
+              onblur="this.style.borderColor='var(--border-soft)'"
+            />
+          </div>
 
-            <!-- Pick count stepper -->
-            <div style="display:flex; flex-direction:column; align-items:center; gap:4px;">
-              <div style="display:flex; align-items:center; gap:4px;">
-                <button id="pick-decrement" style="
-                  width:36px; min-height:44px;
-                  background:var(--bg-elevated);
-                  border:1px solid var(--border-soft);
-                  border-radius:var(--r2);
-                  color:var(--text-secondary);
-                  font-size:18px; cursor:pointer;
-                ">−</button>
-                <span id="pick-count-display" style="
-                  width:36px;
-                  text-align:center;
-                  font-size:18px;
-                  font-family:var(--font-mono);
-                  font-weight:600;
-                  color:var(--text-primary);
-                ">${DEFAULT_PICK_COUNT}</span>
-                <button id="pick-increment" style="
-                  width:36px; min-height:44px;
-                  background:var(--bg-elevated);
-                  border:1px solid var(--border-soft);
-                  border-radius:var(--r2);
-                  color:var(--text-secondary);
-                  font-size:18px; cursor:pointer;
-                ">+</button>
-              </div>
-              <span style="font-size:10px; color:var(--text-tertiary); white-space:nowrap;">${DEFAULT_PICK_COUNT} available today</span>
+          <!-- Pick count stepper row -->
+          <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:var(--s4);">
+            <span style="font-size:13px; color:var(--text-secondary);"># of picks</span>
+            <div style="display:flex; align-items:center; gap:var(--s2);">
+              <button id="pick-decrement" style="
+                width:44px; height:44px;
+                background:var(--bg-elevated);
+                border:1px solid var(--border-soft);
+                border-radius:var(--r2);
+                color:var(--text-secondary);
+                font-size:20px; cursor:pointer;
+              ">−</button>
+              <span id="pick-count-display" style="
+                width:32px;
+                text-align:center;
+                font-size:18px;
+                font-family:var(--font-mono);
+                font-weight:600;
+                color:var(--text-primary);
+              ">${DEFAULT_PICK_COUNT}</span>
+              <button id="pick-increment" style="
+                width:44px; height:44px;
+                background:var(--bg-elevated);
+                border:1px solid var(--border-soft);
+                border-radius:var(--r2);
+                color:var(--text-secondary);
+                font-size:20px; cursor:pointer;
+              ">+</button>
+              <span style="font-size:12px; color:var(--text-tertiary); margin-left:var(--s2);">${DEFAULT_PICK_COUNT} available</span>
             </div>
           </div>
 
