@@ -192,30 +192,29 @@ function _attachHandlers(container, trades, decisions, signal) {
   const cardState = new Map(Object.entries(decisions))
   const opts = signal ? { signal } : {}
 
-  container.addEventListener('click', (e) => {
-    // ── Follow button ────────────────────────────────────────────────────────
-    const followBtn = e.target.closest('[data-action="follow"]')
-    if (followBtn) {
+  // ── Direct listeners on follow/ignore buttons ─────────────────────────────
+  // iOS WebKit sometimes fires click on the flex container (.decision-row)
+  // instead of the button child. e.target.closest() from the container would
+  // miss the button. Direct listeners on each button are reliable on all platforms.
+
+  container.querySelectorAll('.trade-follow-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
       e.stopPropagation()
-      const tradeId = followBtn.dataset.tradeId
+      const tradeId = btn.dataset.tradeId
       const trade   = trades.find(t => t.id === tradeId)
       if (!trade) return
-
-      const alreadyFollowed = cardState.get(tradeId) === 'followed'
-      if (alreadyFollowed) return // idempotent
+      if (cardState.get(tradeId) === 'followed') return
 
       cardState.set(tradeId, 'followed')
       _saveDecision(tradeId, 'followed')
-
       _applyFollowedUI(container, tradeId)
-      return
-    }
+    }, opts)
+  })
 
-    // ── Ignore button ────────────────────────────────────────────────────────
-    const ignoreBtn = e.target.closest('[data-action="ignore"]')
-    if (ignoreBtn) {
+  container.querySelectorAll('.trade-ignore-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
       e.stopPropagation()
-      const tradeId = ignoreBtn.dataset.tradeId
+      const tradeId = btn.dataset.tradeId
       const trade   = trades.find(t => t.id === tradeId)
       if (!trade) return
       if (cardState.get(tradeId) === 'ignored') return
@@ -234,37 +233,43 @@ function _attachHandlers(container, trades, decisions, signal) {
       // Force reflow so transition fires
       void card.offsetHeight
 
-      requestAnimationFrame(() => {
-        card.style.maxHeight  = '0'
-        card.style.marginTop  = '0'
-        card.style.paddingTop = '0'
+      const rafId     = requestAnimationFrame(() => {
+        card.style.maxHeight     = '0'
+        card.style.marginTop     = '0'
+        card.style.paddingTop    = '0'
         card.style.paddingBottom = '0'
-        card.style.overflow   = 'hidden'
+        card.style.overflow      = 'hidden'
       })
+      const timerId = setTimeout(() => {
+        // Guard: navigation may have cleared the DOM before the 320ms fired.
+        // Calling .remove() on a detached node crashes iOS WebKit layout.
+        if (card.parentElement) card.remove()
+      }, 320)
 
-      setTimeout(() => card.remove(), 320)
-      return
-    }
+      // Cancel in-flight animation if user navigates away
+      signal?.addEventListener('abort', () => {
+        cancelAnimationFrame(rafId)
+        clearTimeout(timerId)
+      }, { once: true })
+    }, opts)
+  })
 
-    // ── Expand / collapse card body ──────────────────────────────────────────
+  // ── Delegated expand / collapse (clicking anywhere in card body) ──────────
+  container.addEventListener('click', (e) => {
     const cardBody = e.target.closest('[data-expand-target]')
-    if (cardBody) {
-      const tradeId    = cardBody.dataset.expandTarget
-      const card       = container.querySelector(`.trade-card[data-trade-id="${tradeId}"]`)
-      const expandedEl = container.querySelector(`[data-expanded-id="${tradeId}"]`)
-      if (!card || !expandedEl) return
+    if (!cardBody) return
+    const tradeId    = cardBody.dataset.expandTarget
+    const card       = container.querySelector(`.trade-card[data-trade-id="${tradeId}"]`)
+    const expandedEl = container.querySelector(`[data-expanded-id="${tradeId}"]`)
+    if (!card || !expandedEl) return
 
-      const isExpanded = card.dataset.expanded === 'true'
-      if (isExpanded) {
-        // Collapse
-        expandedEl.style.display   = 'none'
-        card.dataset.expanded      = 'false'
-      } else {
-        // Expand
-        expandedEl.style.display   = 'block'
-        card.dataset.expanded      = 'true'
-      }
-      return
+    const isExpanded = card.dataset.expanded === 'true'
+    if (isExpanded) {
+      expandedEl.style.display = 'none'
+      card.dataset.expanded    = 'false'
+    } else {
+      expandedEl.style.display = 'block'
+      card.dataset.expanded    = 'true'
     }
   }, opts)
 }
