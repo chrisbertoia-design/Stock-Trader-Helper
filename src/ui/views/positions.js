@@ -110,6 +110,10 @@ function _wireUpload(container) {
   const input = container.querySelector('#csv-upload')
   if (!input) return
 
+  // <label> doesn't reliably trigger file picker on iOS WebKit — use button + .click()
+  const btn = container.querySelector('#csv-upload-label')
+  if (btn) btn.addEventListener('click', () => input.click())
+
   input.addEventListener('change', async (e) => {
     const file = e.target.files?.[0]
     if (!file) return
@@ -263,10 +267,10 @@ export async function renderPositions(container) {
           </div>
           ${isMock ? `<div style="font-size:11px; color:var(--accent); margin-top:4px;">Using sample data — upload CSV to see your real positions</div>` : ''}
         </div>
-        <label class="btn btn-ghost" style="cursor:pointer; font-size:12px; min-height:44px; display:inline-flex; align-items:center;" id="csv-upload-label">
+        <input type="file" accept=".csv" id="csv-upload" style="display:none" />
+        <button class="btn btn-ghost" id="csv-upload-label" style="font-size:12px; min-height:44px;">
           Upload CSV
-          <input type="file" accept=".csv" id="csv-upload" style="display:none" />
-        </label>
+        </button>
       </div>
 
       <div class="stat-row">
