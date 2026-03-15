@@ -122,6 +122,74 @@ When a task requires web research: Haiku fetches and retrieves → Sonnet reads,
 - Sub-agents default to Haiku. Escalate to Sonnet only if the subtask requires interpretation or complex logic.
 - When a task can be split into 2+ independent pieces, split it. Don't serialize what can be parallelized.
 
+### Bug Fix Protocol (REQUIRED — always follow this sequence)
+When any bug is identified, follow this exact multi-agent flow:
+
+**Step 1 — Architecture Assessment (Explore agent, foreground)**
+Launch one Explore agent to read all affected files and produce a full bug report:
+- Root cause with exact file + line numbers
+- Why it happens (not just what)
+- Impact on other views/modules
+- Recommended fix approach per bug
+Do NOT write any code yet. Wait for the assessment to complete.
+
+**Step 2 — Parallel Code Fix Agents (one agent per bug, all launched simultaneously)**
+After the assessment, launch one coding agent per distinct bug. All agents run in parallel:
+- Each agent receives: the assessment excerpt for its bug, the exact files it must edit, and the fix approach
+- Each agent reads its files, implements the fix, and returns
+- Agents must NOT push — main agent handles git after all fixes land
+
+**Step 3 — Commit + Push (main agent)**
+After all fix agents complete, main agent: reviews diffs, commits with detailed message, pushes.
+
+**Step 4 — Eval Agent (background)**
+After push, launch a background eval agent to update `docs/evals/ui-click-paths.md` with regression tests for the bugs just fixed.
+
+## Eval Protocol
+
+### Purpose
+`docs/evals/ui-click-paths.md` is the canonical pre-flight checklist. Every interactive element in every view must be listed. Run this checklist on iOS Chrome (GitHub Pages) before declaring any build ready.
+
+### When to Run Evals
+- After every bug fix push
+- After every new view or interactive element is added
+- Before any mobile QA session
+
+### Eval Agent Instructions (use these EXACT instructions every time you spawn an eval agent)
+
+> You are a test engineer writing a manual QA checklist for a mobile PWA (iOS Chrome, GitHub Pages).
+> Your checklist must be **exhaustive** — every tap, every button, every pill, every input, every navigation path.
+> No interactive element may be skipped. Assume the tester has never seen the app.
+>
+> **For each item, provide:**
+> - [ ] **[View > Element]**: plain English description of exactly what to tap/type/swipe
+> - **Before state**: what the UI looks like before the action
+> - **Expected result**: exactly what changes — text, color, navigation, animation, toast, etc.
+> - **Regression** (if applicable): which bug this test prevents from re-appearing
+>
+> **Coverage requirements — every view must include:**
+> 1. **Navigation in**: how to reach this view from home
+> 2. **Navigation out**: back button behavior, where it lands
+> 3. **Every button**: normal tap, double-tap (should not double-fire), tap while disabled
+> 4. **Every pill/filter**: first tap (activates), second tap on same (no change or deactivates), rapid successive taps on different pills (each should register correctly), all combinations
+> 5. **Every card**: expand, collapse, re-expand
+> 6. **Every input**: type value, clear value, submit empty
+> 7. **Every async action**: what shows during load (skeleton/spinner), what shows on success, what shows on error
+> 8. **Scroll behavior**: can scroll without crash, position resets on re-navigation
+> 9. **Re-navigation**: leave view, return, verify state resets correctly
+>
+> **Crash regression section (always include):**
+> - Rapid back-and-forth navigation (home→feed→home→feed 5 times fast)
+> - Tap filter pills 10 times in rapid succession
+> - Navigate away from positions while skeleton is loading
+> - Open feed, follow a trade, navigate home, return to feed — followed state persists
+>
+> **Format**: Group by view. Use `###` headers. Markdown checkboxes. Be specific about color changes, exact text, exact timing.
+> **Output file**: `docs/evals/ui-click-paths.md`
+
+### Eval Agent Model
+Use **Sonnet** for eval agents — they need to reason about expected behavior, not just retrieve files.
+
 ## Logging
 Structured logger in `src/services/logger.js`. Levels: DEBUG, INFO, WARN, ERROR. Flushes to Sheets `log` tab in batches. Falls back to console when Sheets not connected. Every module uses `const CAT = 'MODULE_NAME'` and imports `{ debug, info, warn, error }`.
 
