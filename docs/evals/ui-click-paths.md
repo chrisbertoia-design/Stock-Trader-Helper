@@ -855,4 +855,254 @@ These tests target specific known failure modes. Run them in order after any cod
 
 ---
 
+### Feed — BL-019 HSW Integration
+
+#### Loading State
+
+- [ ] **[Feed > Skeleton > appears immediately]**: Tap "What's New" tile on Home to navigate to Feed
+  - **Before**: Home view is visible; Feed has not rendered yet
+  - **Expected**: Within one animation frame of the tap, the Feed container fills with 6 shimmer card placeholders. The shimmer animation (left-to-right light sweep, ~1.5 s cycle) is visible on all 6 cards before any network response arrives. The page does NOT show a blank black screen at any point between the tap and skeleton render.
+
+- [ ] **[Feed > Skeleton > card count]**: Count the shimmer placeholders while Feed is loading
+  - **Before**: HSW fetch is in-flight; skeleton is displayed
+  - **Expected**: Exactly 6 skeleton cards are visible — no more, no fewer. Each card has 3 shimmer bars (title ~65% width, subtitle ~45% width, third bar ~55% width) inside a `.card`-styled container with standard padding.
+
+- [ ] **[Feed > Skeleton > subtitle text]**: Read the subtitle below the "Recent Trades" heading during load
+  - **Before**: Skeleton is showing; fetch not yet resolved
+  - **Expected**: Subtitle reads exactly "Loading congressional trades…" in muted secondary text color. The heading "Recent Trades" is already visible in full-weight white/primary text.
+
+- [ ] **[Feed > Skeleton > heading visible]**: Confirm heading renders with skeleton
+  - **Before**: Feed just navigated to; skeleton active
+  - **Expected**: "Recent Trades" heading (18 px, font-weight 600, `var(--text-primary)`) is visible above the 6 skeleton cards. No "N disclosures" count appears yet — that text only appears after data loads.
+
+---
+
+#### Live Data Success State
+
+- [ ] **[Feed > Live > subtitle format]**: Wait for HSW fetch to complete successfully with watchlist results
+  - **Before**: Skeleton was showing; fetch just resolved with N > 0 trades
+  - **Expected**: Subtitle changes from "Loading congressional trades…" to "N disclosures · last 30 days" where N is the actual count of visible (non-ignored) trades. If exactly 1 disclosure, reads "1 disclosure · last 30 days" (singular). If 5 disclosures, reads "5 disclosures · last 30 days".
+
+- [ ] **[Feed > Live > no mock banner]**: Observe the area below the subtitle after live data loads
+  - **Before**: Live HSW data loaded successfully (N > 0 watchlist results)
+  - **Expected**: No accent-colored banner text reading "Using sample data" or "Sample data — connect Google to load live trades" is present. The mock indicator `<div>` element is not rendered anywhere in the view.
+
+- [ ] **[Feed > Live > politician names]**: Inspect the name label in any trade card
+  - **Before**: Live data displayed
+  - **Expected**: Politician names match actual congressional member names from the HSW API (not "Nancy Pelosi", "Dan Crenshaw" etc. from the mock constant). Names appear in 14 px medium-weight text in `var(--text-primary)` color, to the right of the party badge.
+
+- [ ] **[Feed > Live > ticker display]**: Inspect the ticker symbol in any trade card
+  - **Before**: Live data displayed
+  - **Expected**: Ticker symbol appears in monospace font, 18 px, font-weight 700, `var(--text-primary)`. Value is an uppercase stock ticker (e.g. "AAPL", "NVDA") sourced from the live HSW payload — not from the MOCK_TRADES constant.
+
+- [ ] **[Feed > Live > party badge D color]**: Locate a Democrat trade card
+  - **Before**: Live data loaded with at least one Democrat trade visible
+  - **Expected**: The party badge shows "D" with blue-tinted text (`color: #6b9bd2`), blue-tinted background (`rgba(107,155,210,0.14)`), and blue-tinted border (`rgba(107,155,210,0.25)`). The badge has a pill shape (`border-radius: 100px`).
+
+- [ ] **[Feed > Live > party badge R color]**: Locate a Republican trade card
+  - **Before**: Live data loaded with at least one Republican trade visible
+  - **Expected**: The party badge shows "R" with red-tinted text (`color: #c47b6e`), red-tinted background (`rgba(196,123,110,0.14)`), and red-tinted border (`rgba(196,123,110,0.25)`). Visual contrast with "D" badge is immediately apparent.
+
+- [ ] **[Feed > Live > BUY action color]**: Find a trade card with action = BUY
+  - **Before**: Live data loaded
+  - **Expected**: "BUY" label is rendered in `var(--buy)` (muted green, ~`#7fb883`), 13 px, font-weight 600. Color is distinctly green, not red or neutral.
+
+- [ ] **[Feed > Live > SELL action color]**: Find a trade card with action = SELL
+  - **Before**: Live data loaded
+  - **Expected**: "SELL" label is rendered in `var(--sell)` (muted red/rust, ~`#c47b6e`), 13 px, font-weight 600. Color is distinctly red/rust, not green.
+
+- [ ] **[Feed > Live > relative date "today"]**: View a trade card where `transaction_date` is today's date
+  - **Before**: Live data contains a trade filed today
+  - **Expected**: The top-right timestamp on that card reads "today" (lowercase), not a date string like "Mar 15" or "0 days ago".
+
+- [ ] **[Feed > Live > relative date "yesterday"]**: View a trade card where `transaction_date` is yesterday
+  - **Before**: Live data contains a trade from yesterday
+  - **Expected**: Timestamp reads "yesterday" (lowercase).
+
+- [ ] **[Feed > Live > relative date "X days ago"]**: View a trade card where `transaction_date` is 5 or more days ago
+  - **Before**: Live data contains an older trade
+  - **Expected**: Timestamp reads "N days ago" where N is the integer number of full days elapsed (e.g. "5 days ago", "12 days ago"). Never shows a raw date string in this position.
+
+---
+
+#### Mock Fallback States
+
+- [ ] **[Feed > Mock > HSW fetch fails — toast]**: Simulate or wait for an HSW network failure (e.g. offline mode, proxy down)
+  - **Before**: Skeleton is showing; HSW fetch was attempted
+  - **Expected**: An error toast appears with the exact text "Could not load live trades — showing sample data". Toast uses error styling (rust/red accent). It auto-dismisses after ~3 seconds. The feed then renders with MOCK_TRADES data.
+
+- [ ] **[Feed > Mock > HSW fetch fails — cards render]**: After the error toast from an HSW failure
+  - **Before**: Toast has appeared; error path taken
+  - **Expected**: 5 mock trade cards render (Nancy Pelosi/NVDA, Dan Crenshaw/MSFT, Ro Khanna/AAPL, Tommy Tuberville/AMD, Nancy Pelosi/TSM). The skeleton is fully replaced — no shimmer cards remain.
+
+- [ ] **[Feed > Mock > HSW fetch fails — mock banner visible]**: Inspect the area below the subtitle after HSW failure
+  - **Before**: Error path; usingMock = true
+  - **Expected**: An accent-colored (`var(--accent)`) line reads "Using sample data — upload positions or connect Google to see live trades". This line appears directly below the subtitle, at 11 px font size.
+
+- [ ] **[Feed > Mock > HSW fetch fails — subtitle text]**: Read the subtitle after HSW failure
+  - **Before**: Mock data rendered after error
+  - **Expected**: Subtitle reads "Sample data — connect Google to load live trades" in `var(--text-secondary)` color. It does NOT read "N disclosures · last 30 days".
+
+- [ ] **[Feed > Mock > HSW returns 0 results — mock banner]**: HSW fetch succeeds but watchlist filter returns 0 trades in past 30 days
+  - **Before**: Skeleton was showing; fetch resolved with an empty filtered array
+  - **Expected**: No error toast is shown. The feed renders MOCK_TRADES. The mock banner "Using sample data — upload positions or connect Google to see live trades" is visible. Subtitle reads "Sample data — connect Google to load live trades".
+
+- [ ] **[Feed > Mock > HSW returns 0 results — no error toast]**: Confirm no toast fires on empty-results path
+  - **Before**: HSW returned data but watchlist filter yielded 0 results
+  - **Expected**: No toast notification appears. The transition from skeleton to mock cards is silent. This distinguishes the "no results" path (silent fallback) from the "fetch error" path (error toast).
+
+- [ ] **[Feed > Mock > Google not connected — seed watchlist]**: Open Feed without completing Google OAuth (not signed in)
+  - **Before**: App loaded but user has not authenticated; `sth_auth` is not in localStorage
+  - **Expected**: The Sheets watchlist read fails silently. Feed falls back to the seed watchlist (`WATCHLIST` from `src/data/watchlist.js`), which includes members like Nancy Pelosi and Mike Johnson with `active: 'Y'`. If HSW fetch also fails (unauthenticated CORS), mock data is shown. No crash. No empty white screen.
+
+- [ ] **[Feed > Mock > mock subtitle format]**: Read subtitle when mock data is active for any reason
+  - **Before**: `usingMock = true` (either error path or zero-results path)
+  - **Expected**: Subtitle is exactly "Sample data — connect Google to load live trades". This text appears regardless of whether the mock was triggered by an HSW error or by a 0-result filter.
+
+---
+
+#### Watchlist Filtering
+
+- [ ] **[Feed > Watchlist > only watchlist members shown]**: Load Feed with live HSW data while authenticated with a Sheets watchlist containing specific names
+  - **Before**: Live data loaded; Sheets watchlist has e.g. 5 active members
+  - **Expected**: Every visible trade card shows a politician name that appears in the Sheets watchlist. No trade from a politician NOT on the watchlist is rendered. This applies to both name exact-match and case-insensitive match as implemented by `filterByWatchlist`.
+
+- [ ] **[Feed > Watchlist > non-watchlist politicians absent]**: Confirm a known non-watchlist politician is not shown
+  - **Before**: Live data; Sheets watchlist does not include e.g. "Mitch McConnell"
+  - **Expected**: No card for Mitch McConnell (or any other off-watchlist politician) appears in the feed, even if HSW returned trades for that politician within the past 30 days.
+
+- [ ] **[Feed > Watchlist > 30-day window]**: Verify trades older than 30 days are excluded
+  - **Before**: Live data loaded; some HSW transactions have `transaction_date` older than 30 days ago
+  - **Expected**: No card appears for a transaction dated more than 30 days before today. Only trades within the rolling 30-day window appear. Count in subtitle reflects only the 30-day window.
+
+- [ ] **[Feed > Watchlist > Sheets watchlist takes priority over seed]**: Authenticated user with a populated `watchlist` Sheets tab
+  - **Before**: Sheets tab has active members; seed WATCHLIST constant also has members
+  - **Expected**: The names used for filtering come from Sheets, not from the seed constant. If a name appears in the seed but not Sheets (and Sheets has ≥ 1 active member), that seed name is NOT used for filtering.
+
+- [ ] **[Feed > Watchlist > empty Sheets watchlist falls back to seed]**: Authenticated user whose `watchlist` Sheets tab exists but has 0 rows with `active = 'Y'`
+  - **Before**: Sheets tab is present but all members have `active ≠ 'Y'`
+  - **Expected**: App falls back to seed watchlist (WATCHLIST constant). No error toast. Filtering proceeds using seed names. Debug log reads "Sheets watchlist empty — using seed (N members)".
+
+---
+
+#### Card Interactions — Regression (must work with live data)
+
+- [ ] **[Feed > Card > tap body to expand]**: Tap anywhere in the upper body of a trade card (name/ticker area, not on a button)
+  - **Before**: Card is collapsed; the "AI Summary" section (`data-expanded-id`) has `display: none`
+  - **Expected**: The expanded section animates open (display switches to `block`). An "AI SUMMARY" label (11 px, uppercase, spaced, `var(--text-tertiary)`) and summary body text appear. "Disclosed: [date] · Traded: [date]" meta row is visible below the summary. The card body click target is the full `.trade-card-body` div — tapping ticker text, politician name, or relative date all trigger expand.
+
+- [ ] **[Feed > Card > tap body to collapse]**: Tap the card body of an already-expanded card
+  - **Before**: Card has `data-expanded="true"`; summary section is visible
+  - **Expected**: Expanded section collapses (`display: none`). Card returns to compact height. No animation jank. `data-expanded` attribute changes to `"false"`.
+
+- [ ] **[Feed > Card > tap expand, then collapse, then re-expand]**: Tap card body three times in sequence
+  - **Before**: Card starts collapsed
+  - **Expected**: First tap → expands. Second tap → collapses. Third tap → expands again. State toggles cleanly each time. No event listener duplication; third tap does not fire twice.
+
+- [ ] **[Feed > Card > Follow button tap]**: Tap the "Follow" button on any trade card
+  - **Before**: Button reads "Follow" with subtle green background (`rgba(127,184,131,0.12)`) and green text (`var(--buy)`)
+  - **Expected**: Button text changes to "✓ Follow". Button background intensifies to `rgba(127,184,131,0.22)`. Border color brightens to `rgba(127,184,131,0.4)`. The card's left border becomes 3 px wide and `var(--buy)` green. The change is instant (no animation). `sth_trade_decisions` in localStorage has `{ "[tradeId]": "followed" }`.
+
+- [ ] **[Feed > Card > Follow button — idempotent second tap]**: Tap "✓ Follow" on an already-followed card
+  - **Before**: Card already in followed state (`✓ Follow` label, green border)
+  - **Expected**: Nothing changes. The `if (cardState.get(tradeId) === 'followed') return` guard fires. No duplicate localStorage writes. Button does not toggle off. Card retains green border.
+
+- [ ] **[Feed > Card > Ignore button tap]**: Tap the "Ignore" button on any trade card
+  - **Before**: Card is visible; button reads "Ignore" in ghost style
+  - **Expected**: Card begins a fade-out + collapse animation over ~300 ms (opacity → 0, max-height → 0, margins collapse). After 320 ms the card element is fully removed from the DOM. The remaining cards close the vertical gap smoothly. `sth_trade_decisions` in localStorage has `{ "[tradeId]": "ignored" }`.
+
+- [ ] **[Feed > Card > Ignore removes from DOM]**: After ignoring a card, inspect the DOM
+  - **Before**: Card removal animation completed
+  - **Expected**: The `.trade-card[data-trade-id="N"]` element is absent from `#feed-cards`. No ghost space or invisible element remains. The total visible card count decreases by 1.
+
+- [ ] **[Feed > Card > Follow persists across navigation]**: Follow a trade, navigate to Positions, then navigate back to Feed
+  - **Before**: A trade was followed in Feed; user is now returning
+  - **Expected**: The followed trade card reappears with "✓ Follow" label, intensified green button background, and 3 px green left border — restored by `_applyFollowedUI()` during render. `sth_trade_decisions` in localStorage still holds `"followed"` for that trade ID.
+
+- [ ] **[Feed > Card > Ignore persists across navigation]**: Ignore a trade, navigate to Home, then navigate back to Feed
+  - **Before**: A trade was ignored; user is returning to Feed
+  - **Expected**: The ignored trade card is NOT rendered. `visibleTrades` filtered it out via `decisions[t.id] !== 'ignored'`. The subtitle count reflects the reduced count. The ignored trade never appears during this session or future sessions until localStorage is cleared.
+
+- [ ] **[Feed > Card > Follow button does not trigger card expand]**: Tap the Follow button precisely
+  - **Before**: Card is collapsed
+  - **Expected**: Card stays collapsed. The follow button has `e.stopPropagation()` which prevents the click from bubbling to the `.trade-card-body` expand handler. Only card body taps trigger expand/collapse.
+
+- [ ] **[Feed > Card > Ignore button does not trigger card expand]**: Tap the Ignore button precisely
+  - **Before**: Card is collapsed
+  - **Expected**: Card begins the removal animation immediately. It does NOT expand first. `e.stopPropagation()` prevents the click from reaching the expand handler.
+
+---
+
+#### Signal / Navigation Guards
+
+- [ ] **[Feed > Signal > navigate away during skeleton]**: Tap "What's New" to start Feed load, then immediately tap ← back before skeleton finishes
+  - **Before**: Feed skeleton just appeared; HSW fetch is in-flight; user taps ← within ~200 ms
+  - **Expected**: Home view renders correctly. The in-flight HSW fetch may complete but its result is discarded. No stale feed content overwrites the Home view. No JS error thrown. `signal.aborted` check in `renderFeed` prevents the `container.innerHTML` write from executing after navigation.
+
+- [ ] **[Feed > Signal > navigate away after fetch resolves]**: Tap "What's New", wait ~2 s for HSW to complete, then rapidly tap ← just as cards begin rendering
+  - **Before**: HSW fetch completed; render is about to write card HTML
+  - **Expected**: If `container.isConnected` is false at that moment, the render is abandoned. Home view is intact. No feed cards flash briefly over the home view. No DOM exception from writing to a detached container.
+
+- [ ] **[Feed > Signal > rapid home→feed→home→feed navigation]**: Tap "What's New" → ← → "What's New" → ← → "What's New" five times in rapid succession (~300 ms between taps)
+  - **Before**: Starting from Home; performing 5 rapid round-trips
+  - **Expected**: On the final navigation to Feed, one and only one feed render completes. Earlier in-flight renders are cancelled by their AbortController signals. The final feed view shows the correct trade cards with no duplicate event listeners. No crash. No blank screen. Subtitle count is correct.
+
+- [ ] **[Feed > Signal > ignore animation abort on navigation]**: Tap Ignore on a card to start its removal animation, then immediately tap ← to navigate home before the 320 ms timer fires
+  - **Before**: Ignore animation is in-flight (card fading); user navigates away
+  - **Expected**: The `signal` abort event fires, cancelling the `requestAnimationFrame` and `setTimeout` for that card. No attempt to call `.remove()` on a detached node. No crash. Home view renders normally.
+
+---
+
+#### Edge Cases
+
+- [ ] **[Feed > Empty State > all trades ignored]**: Ignore every visible trade card one by one until none remain
+  - **Before**: Feed showing N trade cards (either mock or live)
+  - **Expected**: After ignoring the last card, the feed area (below the header row) shows a centered empty-state block with the text "No recent disclosures found for your watchlist." and a secondary line "All trades may have been dismissed, or your watchlist may be empty." in `var(--text-tertiary)`. No card container or `#feed-cards` div is present.
+
+- [ ] **[Feed > Empty State > correct subtitle when empty]**: Observe the subtitle when the empty state is displayed
+  - **Before**: All trades ignored; empty state rendered
+  - **Expected**: The "Recent Trades" heading and subtitle are still shown above the empty-state message. If on live data, subtitle reads "0 disclosures · last 30 days". If on mock data, subtitle reads "Sample data — connect Google to load live trades".
+
+- [ ] **[Feed > Empty State > persists on return]**: After ignoring all trades, navigate to Home and return to Feed
+  - **Before**: Empty state was the last Feed render before navigating away
+  - **Expected**: Feed re-renders the empty state on return. All decisions are loaded from `sth_trade_decisions` in localStorage. No previously-ignored trade reappears. Empty state message is visible again.
+
+- [ ] **[Feed > Empty State > empty state does not crash]**: Confirm no JS exception when all trades are filtered out
+  - **Before**: `visibleTrades.length === 0` after decision filter
+  - **Expected**: The early-return branch in `renderFeed` executes, writing the empty-state HTML and returning. No subsequent card-render or event-listener code runs. No "Cannot read properties of undefined" or similar error in the console.
+
+---
+
+#### Regression Tests
+
+- [ ] **[Feed > Regression > follow → positions → return]**: Follow one trade card, navigate to Positions (Home → Portfolio tile), then navigate back to Feed (Home → What's New)
+  - **Before**: Trade was followed; Feed is being re-rendered
+  - **Expected**: The followed trade card is visible. Its Follow button reads "✓ Follow" with the intensified green style. Its card has a 3 px green left border. `_applyFollowedUI` ran during render. The other cards are in their default state.
+
+- [ ] **[Feed > Regression > ignore 3 → home → return count]**: Ignore exactly 3 trade cards, navigate to Home, then return to Feed
+  - **Before**: 3 trades ignored; Feed re-renders
+  - **Expected**: The 3 ignored cards are absent. If there were originally 5 mock cards, now 2 are shown. Subtitle reads "2 disclosures · last 30 days" (or mock equivalent with count 2). Ignored trade IDs remain in localStorage.
+
+- [ ] **[Feed > Regression > ignore 3 → home → return DOM check]**: After returning from Home, inspect the DOM for ignored card elements
+  - **Before**: 3 trades were ignored before navigating away
+  - **Expected**: None of the 3 ignored trade card elements (`.trade-card[data-trade-id="X"]`) exist in the DOM. They were excluded from `visibleTrades` before rendering — they were never inserted, not just hidden.
+
+- [ ] **[Feed > Regression > mock IDs vs live IDs do not cross-contaminate]**: Ignore a mock trade (e.g. id "1" = Pelosi/NVDA), then authenticate and reload Feed so live data loads
+  - **Before**: `sth_trade_decisions` has `{ "1": "ignored" }` from mock session; live data now loads
+  - **Expected**: If a live trade happens to have id "1", it will also be filtered out (since the decision lookup is by `trade.id`). If live trade IDs are different (e.g. HSW uses different ID format), those trades appear normally. The key point: no crash, no stale mock card reappears, and ignored IDs from mock do not cause live cards with different IDs to disappear. Verify the live ID format in the HSW API response and confirm the behavior is deterministic.
+
+- [ ] **[Feed > Regression > double-tap Follow does not double-write localStorage]**: Tap Follow on a card, then tap "✓ Follow" again immediately
+  - **Before**: First tap already applied `followed` state
+  - **Expected**: `localStorage.getItem('sth_trade_decisions')` contains exactly one entry for that trade ID. No duplicate or overwrite race condition. The `if (cardState.get(tradeId) === 'followed') return` guard fires on the second tap.
+
+- [ ] **[Feed > Regression > Ignore during expand does not crash]**: Expand a card (tap body), then tap the Ignore button while it is in expanded state
+  - **Before**: Card is expanded (`data-expanded="true"`); expanded section is visible
+  - **Expected**: The full card (including its expanded section) animates out together. The `.trade-card` wrapper includes both the collapsed and expanded DOM, so both fade and collapse simultaneously. No orphaned expanded-section element remains. No JS error.
+
+- [ ] **[Feed > Regression > skeleton replaced on error]**: Trigger HSW fetch failure (offline)
+  - **Before**: Skeleton showing 6 shimmer cards
+  - **Expected**: After the error, all 6 shimmer cards are replaced by real mock trade cards. No shimmer card remains in the DOM. The error toast fires once. The mock banner appears. The subtitle is the mock subtitle text.
+
+---
+
 *Last updated: 2026-03-15*
