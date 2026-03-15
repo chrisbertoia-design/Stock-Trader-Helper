@@ -28,6 +28,7 @@ function _fmtQty(qty) {
 }
 
 function _fmtGlPct(pct) {
+  if (pct == null || isNaN(pct)) return '—'
   const sign = pct >= 0 ? '+' : ''
   return sign + pct.toFixed(2) + '%'
 }
@@ -157,7 +158,6 @@ function _wireUpload(container, signal) {
             throw new Error('No positions derived from transactions CSV')
           }
           info(CAT, `Derived ${Object.keys(parsed).length} positions from transactions CSV`)
-          parsed._rawTxCount = rawTxCount
         } else {
           debug(CAT, 'Detected positions CSV format')
           parsed = parsePositionsCsv(csvText)
@@ -194,8 +194,7 @@ function _wireUpload(container, signal) {
           }
         }
 
-        const count = Object.keys(parsed).filter(k => k !== '_rawTxCount').length
-        const rawTxCount = parsed._rawTxCount
+        const count = Object.keys(parsed).length
         const toastMsg = isTransactions
           ? `${count} positions derived from ${rawTxCount} transactions`
           : `${count} positions loaded from positions export`
@@ -280,7 +279,7 @@ export async function renderPositions(container, signal, { skipLoad = false } = 
     const lastUpload = summary.last_csv_upload
     if (!lastUpload) return 0
     const msPerDay = 86400000
-    return Math.floor((Date.now() - new Date(lastUpload).getTime()) / msPerDay)
+    return Math.floor((Date.now() - new Date(lastUpload + 'T12:00:00').getTime()) / msPerDay)
   })()
   const _staleWarning = (!isMock && _daysStale > 7)
     ? `<div style="color:#f0a500; font-size:12px; margin-top:4px;">⚠ Data is ${_daysStale} days old — upload a fresh CSV</div>`

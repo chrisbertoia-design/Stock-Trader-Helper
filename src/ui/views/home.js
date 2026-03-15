@@ -39,7 +39,7 @@ const MOCK_SIGNAL = { ticker: 'NVDA', tier: 2, flags: 'R + D', stat: '14% of Con
 
 // ── Render ────────────────────────────────────────────────────────────────────
 
-export function renderHome(container) {
+export function renderHome(container, signal) {
   const { newCount, topTrade }                   = MOCK_FEED
   const { ticker: sigTicker, tier, flags, stat } = MOCK_SIGNAL
 

@@ -43,7 +43,7 @@ const MAX_AMOUNT        = 10000
 const DEFAULT_PICK_COUNT = 3  // sensible starting default
 const MAX_PICK_COUNT    = 30
 
-export function renderWhatToBuy(container) {
+export function renderWhatToBuy(container, signal) {
   container.innerHTML = _renderStep1()
 
   // Pill buttons — set amount input value
@@ -54,14 +54,14 @@ export function renderWhatToBuy(container) {
     const error = container.querySelector('#amount-error')
     if (error) error.remove()
     _updatePicksBtn(container)
-  })
+  }, signal ? { signal } : {})
 
   // Clear error on type; update button label dynamically
   container.querySelector('#amount-input').addEventListener('input', () => {
     const error = container.querySelector('#amount-error')
     if (error) error.remove()
     _updatePicksBtn(container)
-  })
+  }, signal ? { signal } : {})
 
   // Stepper buttons
   container.querySelector('#pick-decrement').addEventListener('click', () => {
@@ -69,21 +69,21 @@ export function renderWhatToBuy(container) {
     const val = Math.max(1, parseInt(inp.textContent, 10) - 1)
     inp.textContent = val
     _updatePicksBtn(container)
-  })
+  }, signal ? { signal } : {})
   container.querySelector('#pick-increment').addEventListener('click', () => {
     const inp = container.querySelector('#pick-count-display')
     const val = Math.min(MOCK_PICKS.length, parseInt(inp.textContent, 10) + 1)
     inp.textContent = val
     _updatePicksBtn(container)
-  })
+  }, signal ? { signal } : {})
 
   // Submit
-  container.querySelector('#get-picks-btn').addEventListener('click', () => _submit(container))
+  container.querySelector('#get-picks-btn').addEventListener('click', () => _submit(container, signal), signal ? { signal } : {})
 
   // Enter key
   container.querySelector('#amount-input').addEventListener('keypress', (e) => {
-    if (e.key === 'Enter') _submit(container)
-  })
+    if (e.key === 'Enter') _submit(container, signal)
+  }, signal ? { signal } : {})
 }
 
 function _updatePicksBtn(container) {
@@ -104,7 +104,7 @@ function _updatePicksBtn(container) {
   }
 }
 
-function _submit(container) {
+function _submit(container, signal) {
   const input      = container.querySelector('#amount-input')
   const pickDisplay = container.querySelector('#pick-count-display')
   const amount      = parseInt(input.value, 10)
@@ -126,8 +126,8 @@ function _submit(container) {
 
   container.querySelector('#change-amount-link').addEventListener('click', (e) => {
     e.preventDefault()
-    renderWhatToBuy(container)
-  })
+    renderWhatToBuy(container, signal)
+  }, signal ? { signal } : {})
 }
 
 function _renderStep1() {
@@ -240,6 +240,9 @@ function _renderStep1() {
 function _renderStep2(totalAmount, pickCount) {
   // Slice to requested count (capped by available mock data)
   const available = MOCK_PICKS.slice(0, pickCount)
+  if (!available.length) {
+    return `<div style="padding:var(--s6);text-align:center;color:var(--text-tertiary);">No picks available.</div>`
+  }
   const perPick   = Math.round(totalAmount / available.length / 25) * 25
   const picks = available.map((pick, idx) => ({
     ...pick,

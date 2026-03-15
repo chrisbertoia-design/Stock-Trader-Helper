@@ -90,7 +90,9 @@ export async function showFollowModal({ trade, config }) {
   overlay.querySelectorAll('.slice-preset').forEach(btn => {
     btn.onclick = () => {
       overlay.querySelectorAll('.slice-preset').forEach(b => {
-        b.style.cssText = b.style.cssText.replace(/background.*?;|border-color.*?;|color.*?;/g, '')
+        b.style.background = ''
+        b.style.borderColor = ''
+        b.style.color = ''
       })
       btn.style.background = 'var(--accent-dim)'
       btn.style.borderColor = 'var(--accent)'
@@ -114,6 +116,7 @@ export async function showFollowModal({ trade, config }) {
     }
 
     const confirmBtn = document.getElementById('confirm-follow')
+    if (!confirmBtn) return
     confirmBtn.textContent = 'Building allocation...'
     confirmBtn.disabled = true
 
@@ -202,8 +205,8 @@ async function _saveDecision(trade, amount, allocation, sp500) {
     new Date().toISOString(), '', ''
   ]])
 
-  await appendRows('my_allocations', allocation.map(a => [
-    `alloc_${Date.now()}_${a.ticker}`, decId,
+  await appendRows('my_allocations', allocation.map((a, i) => [
+    `alloc_${Date.now()}_${i}_${a.ticker}`, decId,
     a.ticker, a.amount, sp500?.has(a.ticker) ? 'Y' : 'N', 'N', '', ''
   ]))
 }

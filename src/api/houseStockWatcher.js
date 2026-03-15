@@ -203,6 +203,12 @@ function _normalizeTransaction(raw) {
 }
 
 function _inferParty(raw) {
+  const partyField = (raw.party || '').trim().toLowerCase()
+  if (partyField === 'd') return 'D'
+  if (partyField === 'r') return 'R'
+  if (partyField === 'democrat' || partyField === 'democratic') return 'D'
+  if (partyField === 'republican') return 'R'
+
   const d = (raw.party || raw.representative || '').toLowerCase()
   if (d.includes('(d)') || d.includes('democrat'))   return 'D'
   if (d.includes('(r)') || d.includes('republican')) return 'R'

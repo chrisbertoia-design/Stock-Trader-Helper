@@ -12,6 +12,7 @@ export function showToast(message, typeOrDuration = 3000) {
 
   setTimeout(() => {
     el.classList.add('leaving')
-    el.addEventListener('animationend', () => el.remove())
+    el.addEventListener('animationend', () => el.remove(), { once: true })
+    setTimeout(() => el.remove(), 600)  // fallback if animationend never fires
   }, duration)
 }

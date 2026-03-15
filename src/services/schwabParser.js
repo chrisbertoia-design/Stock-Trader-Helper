@@ -51,6 +51,7 @@ const POSITION_ACTIONS = new Set([
  * Parse raw CSV text → array of normalized transaction objects.
  */
 export function parseTransactionsCsv(csvText) {
+  csvText = csvText.replace(/^\uFEFF/, '')
   debug(CAT, 'parseTransactionsCsv — parsing CSV')
 
   const lines = csvText.trim().split('\n').map(l => l.trim()).filter(Boolean)
@@ -130,6 +131,7 @@ export function derivePositions(transactions) {
  *   Market Value, Day Change $, Day Change %, Cost Basis, Gain/Loss $, Gain/Loss %, ...
  */
 export function parsePositionsCsv(csvText) {
+  csvText = csvText.replace(/^\uFEFF/, '')
   debug(CAT, 'parsePositionsCsv')
   const lines = csvText.trim().split('\n').map(l => l.trim()).filter(Boolean)
   const headerIdx = lines.findIndex(l => /symbol/i.test(l) && /quantity/i.test(l))
@@ -144,8 +146,8 @@ export function parsePositionsCsv(csvText) {
     price:     headers.findIndex(h => h === 'price'),
     mkt_value: headers.findIndex(h => h.includes('market_value') || h.includes('mkt_value') || (h.includes('value') && !h.includes('day'))),
     avg_cost:  headers.findIndex(h => h.includes('average_cost') || h.includes('cost_basis_per_share') || h.includes('avg_cost')),
-    gain_loss: headers.findIndex(h => (h.includes('gain') || h.includes('unrealized')) && !h.includes('pct') && !h.includes('percent') && !h.includes('_1')),
-    gl_pct:    headers.findIndex(h => (h.includes('gain') || h.includes('unrealized')) && (h.includes('pct') || h.includes('percent') || h.endsWith('_1'))),
+    gain_loss: headers.findIndex(h => (h.includes('gain') || h.includes('unrealized')) && !h.includes('pct') && !h.includes('percent') && !h.includes('_1') && !h.endsWith('__')),
+    gl_pct:    headers.findIndex(h => (h.includes('gain') || h.includes('unrealized')) && (h.includes('pct') || h.includes('percent') || h.endsWith('_1') || h.endsWith('__'))),
   }
   debug(CAT, 'colIdx map', JSON.stringify(colIdx))
 

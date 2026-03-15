@@ -93,7 +93,7 @@ export async function renderSettings(container, signal) {
 
   // Save button — show Phase 2 toast
   const opts = signal ? { signal } : {}
-  document.getElementById('save-settings').addEventListener('click', () => {
+  container.querySelector('#save-settings').addEventListener('click', () => {
     showToast('Settings save available in Phase 2')
   }, opts)
 }

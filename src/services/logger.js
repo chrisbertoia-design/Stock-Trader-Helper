@@ -11,6 +11,7 @@ let _sheetsWriter = null  // injected after Sheets is initialized
 let _minLevel = LOG_LEVELS.DEBUG
 let _buffer = []          // holds logs until Sheets is ready
 let _flushing = false
+let _writing = false  // re-entrancy guard: prevents appendRows→debug→appendRows loop
 
 export function initLogger({ sheetsWriter, minLevel = 'DEBUG' }) {
   _sheetsWriter = sheetsWriter
@@ -74,8 +75,6 @@ async function _flushBuffer() {
   }
   _flushing = false
 }
-
-let _writing = false  // re-entrancy guard: prevents appendRows→debug→appendRows loop
 
 async function _writeToSheets(entry) {
   if (_writing) { _buffer.push(entry); return }

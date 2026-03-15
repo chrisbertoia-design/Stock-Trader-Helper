@@ -210,7 +210,7 @@ export function getPositionsSummary() {
     total_gl:        +total_gl.toFixed(2),
     total_gl_pct:    +total_gl_pct.toFixed(2),
     cash:            +cash.toFixed(2),
-    position_count:  entries.length,
+    position_count:  entries.filter(p => p.ticker !== 'CASH' && p.ticker !== '$').length,
     last_csv_upload
   }
 }

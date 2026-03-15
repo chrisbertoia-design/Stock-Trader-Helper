@@ -126,6 +126,9 @@ function _signalStrength(tier) {
 }
 
 export function renderTopSignal(container, signal) {
+  _partyFilter = 'all'
+  _actionFilter = 'all'
+  _activeWindow = '14'
   _render(container, signal)
 }
 
@@ -195,21 +198,24 @@ function _render(container, signal) {
 
   const opts = signal ? { signal } : {}
 
-  container.querySelector('#party-filters').addEventListener('click', (e) => {
+  const partyFilters = container.querySelector('#party-filters')
+  if (partyFilters) partyFilters.addEventListener('click', (e) => {
     const btn = e.target.closest('[data-party]')
     if (!btn) return
     _partyFilter = btn.dataset.party
     _render(container, signal)
   }, opts)
 
-  container.querySelector('#action-filters').addEventListener('click', (e) => {
+  const actionFilters = container.querySelector('#action-filters')
+  if (actionFilters) actionFilters.addEventListener('click', (e) => {
     const btn = e.target.closest('[data-action]')
     if (!btn) return
     _actionFilter = btn.dataset.action
     _render(container, signal)
   }, opts)
 
-  container.querySelector('#window-filters').addEventListener('click', (e) => {
+  const windowFilters = container.querySelector('#window-filters')
+  if (windowFilters) windowFilters.addEventListener('click', (e) => {
     const btn = e.target.closest('[data-window]')
     if (!btn) return
     _activeWindow = btn.dataset.window

@@ -380,6 +380,9 @@ async function _apiGet(path) {
   if (!res.ok) {
     const body = await res.text()
     error(CAT, `GET ${path} failed ${res.status}`, body)
+    if (res.status === 401 || res.status === 403) {
+      localStorage.removeItem('sth_auth')
+    }
     throw new Error(`Sheets GET ${path}: ${res.status} ${body}`)
   }
   return res.json()
@@ -403,6 +406,9 @@ async function _apiPost(path, body) {
   if (!res.ok) {
     const b = await res.text()
     error(CAT, `POST ${path} failed ${res.status}`, b)
+    if (res.status === 401 || res.status === 403) {
+      localStorage.removeItem('sth_auth')
+    }
     throw new Error(`Sheets POST ${path}: ${res.status} ${b}`)
   }
   return res.json()
@@ -419,6 +425,9 @@ async function _apiPut(path, body) {
   if (!res.ok) {
     const b = await res.text()
     error(CAT, `PUT ${path} failed ${res.status}`, b)
+    if (res.status === 401 || res.status === 403) {
+      localStorage.removeItem('sth_auth')
+    }
     throw new Error(`Sheets PUT ${path}: ${res.status} ${b}`)
   }
   return res.json()
