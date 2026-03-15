@@ -7,11 +7,32 @@ Stack: Vite + VitePWA, vanilla JS ES modules, Google Sheets API v4, Google OAuth
 House Stock Watcher S3 API, Gemini AI (primary in prod, Ollama fallback locally), ntfy.sh push alerts,
 craft.do-inspired dark design. No backend — everything runs in the browser.
 
+**Core value prop:** "Follow the insiders" — translate congressional trading activity into monthly Schwab Stock Slice buy decisions.
+
+**Use case:** Monthly fixed-amount DCA into Schwab Stock Slices. The app recommends which slices to buy; Schwab handles fractional share math at execution. Not a day-trading or real-time pricing tool.
+
 ## MVP Acceptance Criteria (v1)
 1. Feed tab loads real congressional trades from HSW, filtered by watchlist
 2. Positions tab loads from uploaded Schwab CSV, data persists to Sheets
 3. "What slices to buy with $X" — given a dollar amount, app recommends Schwab Stock Slice picks
    based on congressional consensus signals + user's current positions/allocations
+
+## Product Scope Boundaries (Non-Goals)
+- **No live stock price API** — not in scope for Phase 1 or Phase 2. Schwab executes at market price. Do not add real-time pricing unless user explicitly re-opens this decision.
+- **Congressional signal is the only signal** — no earnings data, analyst ratings, news sentiment, or technical indicators. Congress trades are the sole input to recommendations.
+- **No backend ever** — all computation in browser. Google Sheets is the only persistence layer. Hard constraint.
+- **Monthly DCA is the use case** — not day trading, not real-time alerts. The app surfaces one answer per month: "Given $X this month, which slices?"
+- **Real financial data never in repo** — public GitHub Pages deployment. Use sanitized test fixtures only. `mockPositions.js` and `src/data/test-fixtures/` are the safe references.
+
+## Phase Sequencing
+Do not start a later phase until the prior phase is confirmed working.
+
+1. **Phase 1 — Schwab data** (positions CSV → positions view) ✅ Done
+2. **Phase 2 — Congressional API** (HSW live feed → BL-019, BL-020, BL-021)
+3. **Phase 3 — Use data without AI** (What to Buy driven by real signals)
+4. **Phase 4 — AI layer** (Gemini/Ollama follow/ignore rationale — BL-022, BL-023)
+
+AI work (Phase 4) requires a Mac session with Ollama running locally. Do not begin Gemini wiring until Ollama flow is validated end-to-end. Do not start Phase 4 until Phase 3 is confirmed working.
 
 ## Repo Structure
 ```
@@ -92,6 +113,11 @@ vite.config.js             # Port 5175, /api/hsw proxy (dev CORS fix), VitePWA, 
 - **Zero-qty filter at 0.001 threshold**: Applied in both `derivePositions()` (parser) and in `renderPositions()` view layer. Removes fully-sold positions (transactions residuals) from both storage and display.
 - **Build stamp in header**: `vite.config.js` injects `__APP_BUILD__` (e.g. `v0315.1402`) as a version indicator shown in the app header, derived at build time from UTC date/time.
 - **AI router pattern**: `src/api/ai/index.js` is the single import point for all AI calls. Routes to `gemini.js` (production) or `ollama.js` (local) based on `config.ai_provider`. Views never import provider modules directly.
+- **"What to Buy" is the hero screen**: The monthly decision tool. All other views (Feed, Positions) exist to inform it. Design and performance decisions prioritize this view.
+- **Pick count parameters**: min=1, default=3, max=30. N picks selected always renders exactly N result cards. User-confirmed — do not change without explicit instruction.
+- **Upload = replace, not append**: Positions data is a snapshot. Re-uploading replaces current state. UI copy should say "updated" not "added".
+- **Upload hint must be explicit**: Upload UI must say "Schwab Positions CSV" (not just "CSV"). Transactions CSV produces zero-quantity positions and is not the correct input.
+- **Mock data baseline**: `mockPositions.js` is derived from a sanitized Feb 2026 Schwab snapshot. Update when user's portfolio changes materially.
 
 ## Google Sheets Schema
 | Tab | Columns |
@@ -241,6 +267,8 @@ Structured logger in `src/services/logger.js`. Levels: DEBUG, INFO, WARN, ERROR.
 - Every URL must be clickable
 - On errors: log to `bad.md`, try one fix, surface to user with context if it fails
 - `CLAUDE.md` updates triggered by user-confirmed success ("that works", "ship it"), not every commit
+- **Scope containment**: Do not propose new features or scope expansions until current phase milestones are shipped and confirmed. Surface scope suggestions only after the user says "what's next."
+- **AI feature work (Epic 2)**: Only start in Mac sessions with Ollama running locally. Do not begin AI work on mobile-constrained sessions.
 
 ## GitHub Pages / Mobile Deployment
 - **URL**: `https://chrisbertoia-design.github.io/Stock-Trader-Helper/`
