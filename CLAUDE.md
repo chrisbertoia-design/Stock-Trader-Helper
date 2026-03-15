@@ -94,6 +94,15 @@ vite.config.js             # Port 5175, /api/hsw proxy (dev CORS fix), VitePWA, 
 .env.local                 # VITE_GEMINI_API_KEY, VITE_AI_PROVIDER, VITE_GOOGLE_CLIENT_ID
 ```
 
+## Critical Rules (Read First)
+These are the highest-impact rules — violations have caused production bugs or wasted hours.
+
+1. **Verify AWS S3 region in all production URLs** — wrong region returns 403 silently. The app falls back to mock data with no visible error to the user. When adding or modifying any S3 URL, verify the bucket region in the AWS console. (`bad.md` 2026-03-15: HSW S3 us-east-2 → us-west-2 bug)
+2. **Playwright `route.abort()` masks real API failures** — when tests intercept and abort network requests, both "real 403" and "test abort" trigger the same mock-data fallback code path. Tests pass green even though production is broken. **Action**: every view that has a mock-data fallback MUST have a dedicated test that asserts the mock-data banner is NOT shown when the real API is expected to succeed. See `bad.md` 2026-03-15 for the full incident.
+3. **Never use `USER_ENTERED` for Sheets writes** — always `valueInputOption: 'RAW'`. `USER_ENTERED` converts ISO dates to numeric serials silently. (`bad.md` 2026-03-14)
+4. **Always `<button>` for interactive elements on mobile** — `<div onclick>` and `<label>` wrapping hidden inputs do not reliably fire on iOS WebKit. (`good.md` 2026-03-15)
+5. **Always kill port 5175 before `npm run dev`** — `fuser -k 5175/tcp 2>/dev/null || true` in every terminal block. Port conflicts cause silent stale-code serving.
+
 ## Key Architecture Decisions
 - **Navigation**: Home dashboard + drill-down. `navigate(viewName)` in `app.js`. Back button in header. All views receive `(container, signal)`. `window._navigate` exposed globally.
 - **UI-first build order**: All views use hardcoded mock data in Phase 1. Real API wiring happens in Phase 3. Never import from stores/api in views during UI build phase.
@@ -102,7 +111,7 @@ vite.config.js             # Port 5175, /api/hsw proxy (dev CORS fix), VitePWA, 
 - **Sheets as DB**: 9 tabs — `config`, `log`, `watchlist`, `disclosures`, `consensus`, `recommendations`, `my_decisions`, `my_allocations`, `my_positions`. All writes use `values:batchUpdate`. All reads use `values:batchGet` for dedup.
 - **In-flight dedup**: Both HSW fetch (`_fetchInFlight`) and positions load (`_loadInFlight`) deduplicate concurrent callers. Never fires two parallel Sheets/S3 requests for the same resource.
 - **10s Sheets timeout, 15s HSW timeout**: All fetch calls wrapped in AbortController to prevent hung connections from blocking UI.
-- **CORS fix (dev only)**: Vite proxies `/api/hsw` → S3. Production uses direct S3 URL. `import.meta.env.DEV` switches the URL.
+- **CORS fix (dev only)**: Vite proxies `/api/hsw` → S3. Production uses direct S3 URL (`us-west-2` region). `import.meta.env.DEV` switches the URL. When updating the proxy target or prod URL, verify the S3 region matches.
 - **CSV upload replace-not-append**: `clearTab('my_positions')` before `appendRows` on every CSV upload.
 - **Token age**: Tokens expire at 60min. Silent refresh triggered at 50min. Hard auth errors (401/403) clear `sth_auth` from localStorage.
 - **RAW valueInputOption for all Sheets writes**: Every `appendRows`, `updateCell`, and `writeConfigBatch` call uses `valueInputOption: 'RAW'`. Prevents Sheets from interpreting ISO date strings as date serials (the old USER_ENTERED bug that turned `2026-03-14` into a numeric serial on write).
@@ -118,6 +127,9 @@ vite.config.js             # Port 5175, /api/hsw proxy (dev CORS fix), VitePWA, 
 - **Upload = replace, not append**: Positions data is a snapshot. Re-uploading replaces current state. UI copy should say "updated" not "added".
 - **Upload hint must be explicit**: Upload UI must say "Schwab Positions CSV" (not just "CSV"). Transactions CSV produces zero-quantity positions and is not the correct input.
 - **Mock data baseline**: `mockPositions.js` is derived from a sanitized Feb 2026 Schwab snapshot. Update when user's portfolio changes materially.
+- **Mock fallback observability**: Every view with a mock-data fallback (feed, positions) shows an orange "Using sample data" banner. When wiring real APIs, add a Playwright test that asserts this banner is NOT present under normal conditions — otherwise test isolation hides real API failures.
+- **S3 URL region verification**: HSW bucket is `us-west-2`. When changing any S3 URL, verify the region matches the bucket. Wrong region returns 403, not 404 — easy to misdiagnose as a permissions issue.
+- **Format detection order for multi-format parsers**: When a file could match multiple parsers (e.g. Schwab positions vs transactions CSV), detect by the most specific header pattern first (transactions: `Date,Action,Symbol`), then fall back to the more general parser. Generic `includes('symbol')` matching catches both formats and produces wrong results.
 
 ## Google Sheets Schema
 | Tab | Columns |
@@ -267,6 +279,7 @@ Structured logger in `src/services/logger.js`. Levels: DEBUG, INFO, WARN, ERROR.
 - Every URL must be clickable
 - On errors: log to `bad.md`, try one fix, surface to user with context if it fails
 - `CLAUDE.md` updates triggered by user-confirmed success ("that works", "ship it"), not every commit
+- **Test isolation awareness**: When Playwright tests use `route.abort()` or `route.fulfill()` to mock network requests, green tests do NOT prove the real API works. After wiring a real API, always verify in the browser (dev server or GitHub Pages) that real data loads — not just that tests pass.
 - **Scope containment**: Do not propose new features or scope expansions until current phase milestones are shipped and confirmed. Surface scope suggestions only after the user says "what's next."
 - **AI feature work (Epic 2)**: Only start in Mac sessions with Ollama running locally. Do not begin AI work on mobile-constrained sessions.
 

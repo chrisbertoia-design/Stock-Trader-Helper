@@ -62,3 +62,26 @@ batchGet/batchUpdate wired. This is stable — don't touch auth or Sheets init w
 `_timedFetch()` (10s Sheets) and HSW fetch (15s) use AbortController to prevent hung connections.
 Avoids UI lockups when network is slow or S3/Sheets is unresponsive.
 **Reuse**: wrap every external fetch in an AbortController with a project-appropriate timeout.
+
+## 2026-03-15 | RAW valueInputOption prevents Sheets date mangling
+`USER_ENTERED` causes Google Sheets to auto-interpret ISO date strings (e.g. `2026-03-14`) as date
+serials (numeric values). Switching all writes to `valueInputOption: 'RAW'` preserves strings as-is.
+Combined with `_parseDateField()` serial guard on read for backward compat with old rows.
+**Reuse**: always use RAW for any Sheets write that includes date strings or values that could be misinterpreted.
+
+## 2026-03-15 | Logger re-entrancy guard prevents infinite recursion
+`logger.js` writes logs to Sheets via `appendRows()`, which itself calls `debug()`. Without a guard,
+this creates `appendRows→debug→appendRows→...` infinite recursion. Fix: `_writing` boolean flag checked
+at the top of the flush function; if true, skip the Sheets write and console-only.
+**Reuse**: any module that logs from within its own write path needs a re-entrancy guard.
+
+## 2026-03-15 | AbortController per-navigation prevents stale renders
+Each `navigate()` call creates a new AbortController, passing its signal to the view renderer. When the
+user navigates away before an async render completes, the signal aborts in-flight fetches and guards
+against writing DOM into a container that has already been replaced.
+**Reuse**: any async view render that outlives its navigation context needs signal-based cancellation.
+
+## 2026-03-15 | sessionStorage for reload view persistence (not localStorage)
+`sth_last_view` in sessionStorage restores the active view on page reload within the same tab session.
+Using sessionStorage (not localStorage) means new tabs start fresh at home, which is correct behavior.
+**Reuse**: ephemeral per-tab state goes in sessionStorage; cross-session state goes in localStorage.
