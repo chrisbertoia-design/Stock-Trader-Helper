@@ -27,12 +27,28 @@ export function renderWhatToBuy(container) {
     container.querySelector('#amount-input').value = pill.dataset.amount
     const error = container.querySelector('#amount-error')
     if (error) error.remove()
+    _updatePicksBtn(container)
   })
 
-  // Clear error on type
+  // Clear error on type; update button label dynamically
   container.querySelector('#amount-input').addEventListener('input', () => {
     const error = container.querySelector('#amount-error')
     if (error) error.remove()
+    _updatePicksBtn(container)
+  })
+
+  // Stepper buttons
+  container.querySelector('#pick-decrement').addEventListener('click', () => {
+    const inp = container.querySelector('#pick-count-display')
+    const val = Math.max(1, parseInt(inp.textContent, 10) - 1)
+    inp.textContent = val
+    _updatePicksBtn(container)
+  })
+  container.querySelector('#pick-increment').addEventListener('click', () => {
+    const inp = container.querySelector('#pick-count-display')
+    const val = Math.min(MAX_PICK_COUNT, parseInt(inp.textContent, 10) + 1)
+    inp.textContent = val
+    _updatePicksBtn(container)
   })
 
   // Submit
@@ -44,11 +60,29 @@ export function renderWhatToBuy(container) {
   })
 }
 
+function _updatePicksBtn(container) {
+  const count  = parseInt(container.querySelector('#pick-count-display')?.textContent, 10) || DEFAULT_PICK_COUNT
+  const amount = parseInt(container.querySelector('#amount-input')?.value, 10) || 0
+  const btn    = container.querySelector('#get-picks-btn')
+  if (btn) btn.textContent = `Get ${count} Pick${count !== 1 ? 's' : ''} →`
+
+  // Per-slice minimum warning
+  const existing = container.querySelector('#slice-warning')
+  if (existing) existing.remove()
+  if (amount > 0 && count > 0 && amount / count < 5) {
+    const warn = document.createElement('div')
+    warn.id = 'slice-warning'
+    warn.style.cssText = `color:var(--sell);font-size:12px;margin-top:var(--s2);`
+    warn.textContent = `Minimum $5 per slice — reduce picks or increase amount.`
+    container.querySelector('#get-picks-btn').after(warn)
+  }
+}
+
 function _submit(container) {
   const input      = container.querySelector('#amount-input')
-  const pickInput  = container.querySelector('#pick-count-input')
-  const amount     = parseInt(input.value, 10)
-  const pickCount  = Math.min(Math.max(parseInt(pickInput?.value, 10) || DEFAULT_PICK_COUNT, 1), MAX_PICK_COUNT)
+  const pickDisplay = container.querySelector('#pick-count-display')
+  const amount      = parseInt(input.value, 10)
+  const pickCount   = Math.min(Math.max(parseInt(pickDisplay?.textContent, 10) || DEFAULT_PICK_COUNT, 1), MAX_PICK_COUNT)
 
   const existingError = container.querySelector('#amount-error')
   if (existingError) existingError.remove()
@@ -103,30 +137,35 @@ function _renderStep1() {
               />
             </div>
 
-            <!-- Pick count -->
-            <div style="display:flex; flex-direction:column; align-items:center; gap:2px;">
-              <input
-                id="pick-count-input"
-                type="number"
-                value="${DEFAULT_PICK_COUNT}"
-                min="1"
-                max="${MAX_PICK_COUNT}"
-                style="
-                  width:52px;
-                  background:var(--bg-primary);
+            <!-- Pick count stepper -->
+            <div style="display:flex; flex-direction:column; align-items:center; gap:4px;">
+              <div style="display:flex; align-items:center; gap:4px;">
+                <button id="pick-decrement" style="
+                  width:36px; min-height:44px;
+                  background:var(--bg-elevated);
                   border:1px solid var(--border-soft);
                   border-radius:var(--r2);
-                  padding:var(--s3) var(--s2);
-                  font-size:18px;
-                  color:var(--text-primary);
-                  font-family:var(--font-mono);
+                  color:var(--text-secondary);
+                  font-size:18px; cursor:pointer;
+                ">−</button>
+                <span id="pick-count-display" style="
+                  width:36px;
                   text-align:center;
-                  transition:border-color var(--fast) var(--ease);
-                "
-                onfocus="this.style.borderColor='var(--accent)'"
-                onblur="this.style.borderColor='var(--border-soft)'"
-              />
-              <span style="font-size:10px; color:var(--text-tertiary); white-space:nowrap;">picks (max ${MAX_PICK_COUNT})</span>
+                  font-size:18px;
+                  font-family:var(--font-mono);
+                  font-weight:600;
+                  color:var(--text-primary);
+                ">${DEFAULT_PICK_COUNT}</span>
+                <button id="pick-increment" style="
+                  width:36px; min-height:44px;
+                  background:var(--bg-elevated);
+                  border:1px solid var(--border-soft);
+                  border-radius:var(--r2);
+                  color:var(--text-secondary);
+                  font-size:18px; cursor:pointer;
+                ">+</button>
+              </div>
+              <span style="font-size:10px; color:var(--text-tertiary); white-space:nowrap;">${DEFAULT_PICK_COUNT} available today</span>
             </div>
           </div>
 
@@ -155,7 +194,7 @@ function _renderStep1() {
             class="btn btn-primary"
             style="width:100%; padding:var(--s4); font-size:14px;"
           >
-            Get Picks →
+            Get ${DEFAULT_PICK_COUNT} Pick${DEFAULT_PICK_COUNT !== 1 ? 's' : ''} →
           </button>
         </div>
 

@@ -85,11 +85,16 @@ const MOCK_SIGNALS = [
   },
 ]
 
-const FILTERS = [
+const PARTY_FILTERS = [
+  { key: 'all', label: 'All' },
+  { key: 'D',   label: 'Dem' },
+  { key: 'R',   label: 'Rep' },
+]
+
+const ACTION_FILTERS = [
   { key: 'all',  label: 'All' },
-  { key: 'D',    label: 'Democrat' },
-  { key: 'R',    label: 'Republican' },
-  { key: 'buy',  label: 'Buys only' },
+  { key: 'buy',  label: 'Buys' },
+  { key: 'sell', label: 'Sells' },
 ]
 
 const WINDOWS = [
@@ -98,54 +103,61 @@ const WINDOWS = [
   { key: '90', label: '90d' },
 ]
 
-let _activeFilter = 'all'
+let _partyFilter  = 'all'
+let _actionFilter = 'all'
 let _activeWindow = '14'
+
+function _signalStrength(tier) {
+  if (tier >= 3) return { label: 'Strong',   dots: '●●●', color: 'var(--buy)' }
+  if (tier === 2) return { label: 'Moderate', dots: '●●○', color: 'var(--accent)' }
+  return              { label: 'Weak',      dots: '●○○', color: 'var(--text-tertiary)' }
+}
 
 export function renderTopSignal(container) {
   _render(container)
 }
 
+function _filterBtn(key, active, label, dataAttr) {
+  return `<button
+    ${dataAttr}="${key}"
+    style="
+      padding:var(--s2) var(--s3);
+      border-radius:var(--r2);
+      border:1px solid ${active ? 'var(--accent)' : 'var(--border-soft)'};
+      background:${active ? 'rgba(201,177,135,0.12)' : 'var(--bg-elevated)'};
+      color:${active ? 'var(--accent)' : 'var(--text-secondary)'};
+      font-size:12px; cursor:pointer; min-height:36px;
+    "
+  >${label}</button>`
+}
+
 function _render(container) {
-  const filtered = _applyFilter(MOCK_SIGNALS, _activeFilter)
+  const filtered = _applyFilter(MOCK_SIGNALS, _partyFilter, _actionFilter)
 
   container.innerHTML = `
     <div style="max-width:480px; margin:0 auto;">
 
-      <!-- Filter bar -->
-      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:var(--s4);">
-        <div id="party-filters" style="display:flex; gap:var(--s2); flex-wrap:wrap;">
-          ${FILTERS.map(f => `
-            <button
-              data-filter="${f.key}"
-              style="
-                padding:var(--s2) var(--s3);
-                border-radius:var(--r2);
-                border:1px solid ${_activeFilter === f.key ? 'var(--accent)' : 'var(--border-soft)'};
-                background:${_activeFilter === f.key ? 'rgba(201,177,135,0.12)' : 'var(--bg-elevated)'};
-                color:${_activeFilter === f.key ? 'var(--accent)' : 'var(--text-secondary)'};
-                font-size:12px;
-                cursor:pointer;
-                min-height:32px;
-              "
-            >${f.label}</button>
-          `).join('')}
-        </div>
-        <div id="window-filters" style="display:flex; gap:var(--s1);">
-          ${WINDOWS.map(w => `
-            <button
-              data-window="${w.key}"
-              style="
+      <!-- Filter rows -->
+      <div style="display:flex; flex-direction:column; gap:var(--s2); margin-bottom:var(--s4);">
+        <div style="display:flex; align-items:center; justify-content:space-between;">
+          <div id="party-filters" style="display:flex; gap:var(--s2);">
+            ${PARTY_FILTERS.map(f => _filterBtn(f.key, _partyFilter === f.key, f.label, 'data-party')).join('')}
+          </div>
+          <div id="window-filters" style="display:flex; gap:var(--s1);">
+            ${WINDOWS.map(w => `
+              <button data-window="${w.key}" style="
                 padding:var(--s1) var(--s3);
                 border-radius:var(--r2);
                 border:1px solid ${_activeWindow === w.key ? 'var(--accent)' : 'var(--border-subtle)'};
                 background:${_activeWindow === w.key ? 'rgba(201,177,135,0.08)' : 'transparent'};
                 color:${_activeWindow === w.key ? 'var(--accent)' : 'var(--text-tertiary)'};
-                font-size:11px;
-                cursor:pointer;
-                min-height:28px;
-              "
-            >${w.label}</button>
-          `).join('')}
+                font-size:11px; cursor:pointer; min-height:28px;
+              ">${w.label}</button>
+            `).join('')}
+          </div>
+        </div>
+        <div id="action-filters" style="display:flex; gap:var(--s2);">
+          ${ACTION_FILTERS.map(f => _filterBtn(f.key, _actionFilter === f.key, f.label, 'data-action')).join('')}
         </div>
       </div>
 
@@ -169,9 +181,16 @@ function _render(container) {
   `
 
   container.querySelector('#party-filters').addEventListener('click', (e) => {
-    const btn = e.target.closest('[data-filter]')
+    const btn = e.target.closest('[data-party]')
     if (!btn) return
-    _activeFilter = btn.dataset.filter
+    _partyFilter = btn.dataset.party
+    _render(container)
+  })
+
+  container.querySelector('#action-filters').addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-action]')
+    if (!btn) return
+    _actionFilter = btn.dataset.action
     _render(container)
   })
 
@@ -183,12 +202,13 @@ function _render(container) {
   })
 }
 
-function _applyFilter(signals, filter) {
-  if (filter === 'all')  return signals
-  if (filter === 'buy')  return signals.filter(s => s.buyCount > s.sellCount)
-  if (filter === 'D')    return signals.filter(s => s.partyD >= s.partyR)
-  if (filter === 'R')    return signals.filter(s => s.partyR > s.partyD)
-  return signals
+function _applyFilter(signals, partyFilter, actionFilter) {
+  let out = signals
+  if (partyFilter === 'D')    out = out.filter(s => s.partyD >= s.partyR)
+  if (partyFilter === 'R')    out = out.filter(s => s.partyR > s.partyD)
+  if (actionFilter === 'buy') out = out.filter(s => s.buyCount > s.sellCount)
+  if (actionFilter === 'sell') out = out.filter(s => s.sellCount > 0)
+  return out
 }
 
 function _renderSignalCard(sig, rank) {
@@ -197,6 +217,7 @@ function _renderSignalCard(sig, rank) {
   const bipartisan  = sig.partyD > 0 && sig.partyR > 0
   const dWidth      = Math.round((sig.partyD / sig.memberCount) * 100)
   const rWidth      = 100 - dWidth
+  const strength    = _signalStrength(sig.tier)
 
   return `
     <div class="card" style="padding:var(--s4); margin-bottom:var(--s3);">
@@ -255,15 +276,20 @@ function _renderSignalCard(sig, rank) {
         </div>
       </div>
 
-      <!-- Row 3: party bar -->
-      <div>
-        <div style="font-size:10px; color:var(--text-tertiary); margin-bottom:4px; display:flex; justify-content:space-between;">
-          <span>D ${sig.partyD}</span>
-          <span>R ${sig.partyR}</span>
+      <!-- Row 3: party bar + signal strength -->
+      <div style="display:flex; align-items:center; gap:var(--s4);">
+        <div style="flex:1;">
+          <div style="font-size:10px; color:var(--text-tertiary); margin-bottom:4px; display:flex; justify-content:space-between;">
+            <span>D ${sig.partyD}</span>
+            <span>R ${sig.partyR}</span>
+          </div>
+          <div style="display:flex; height:4px; border-radius:2px; overflow:hidden; background:var(--bg-elevated);">
+            <div style="width:${dWidth}%; background:#4a90d9; border-radius:2px 0 0 2px;"></div>
+            <div style="width:${rWidth}%; background:#d94a4a; border-radius:0 2px 2px 0;"></div>
+          </div>
         </div>
-        <div style="display:flex; height:4px; border-radius:2px; overflow:hidden; background:var(--bg-elevated);">
-          <div style="width:${dWidth}%; background:#4a90d9; border-radius:2px 0 0 2px;"></div>
-          <div style="width:${rWidth}%; background:#d94a4a; border-radius:0 2px 2px 0;"></div>
+        <div style="font-size:12px; color:${strength.color}; font-weight:500; white-space:nowrap;">
+          ${strength.dots} ${strength.label}
         </div>
       </div>
 
