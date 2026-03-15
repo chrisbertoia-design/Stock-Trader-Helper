@@ -51,6 +51,7 @@ export function renderApp({ spreadsheetId }) {
     const { signal } = _navAbort
 
     info(CAT, `Navigate: ${viewName}`)
+    _persistView(viewName)
 
     backBtn.classList.toggle('hidden', viewName === 'home')
     settingsBtn.classList.toggle('hidden', viewName === 'settings')
@@ -81,5 +82,11 @@ export function renderApp({ spreadsheetId }) {
   backBtn.addEventListener('click',    () => navigate('home'))
   settingsBtn.addEventListener('click', () => navigate('settings'))
 
-  navigate('home')
+  // Option A: restore last view on reload (sessionStorage — clears on tab close)
+  const lastView = sessionStorage.getItem('sth_last_view')
+  navigate(lastView && lastView !== 'home' ? lastView : 'home')
+}
+
+function _persistView(viewName) {
+  try { sessionStorage.setItem('sth_last_view', viewName) } catch (_) { /* quota full */ }
 }

@@ -245,6 +245,10 @@ Structured logger in `src/services/logger.js`. Levels: DEBUG, INFO, WARN, ERROR.
 | Feed view | ✅ Working | 3-state trade cards, follows/ignores, mock HSW data |
 | Toast notifications | ✅ Working | Success/error/info, auto-dismiss |
 | Structured logging | ✅ Working | Flushes to Sheets `log` tab when connected, console fallback |
+| AbortController navigation | ✅ Working | Per-navigation signal; auto-removes listeners, guards stale async renders |
+| Logger re-entrancy guard | ✅ Working | `_writing` flag prevents appendRows→debug→appendRows infinite recursion |
+| Playwright test suite | ✅ Working | 75 tests across all views; run with `npx playwright test` |
+| Reload view persistence | ✅ Working | sessionStorage `sth_last_view` restores active view on page reload |
 
 ### Active
 | ID | Title | Priority | Status |
@@ -274,3 +278,4 @@ Structured logger in `src/services/logger.js`. Levels: DEBUG, INFO, WARN, ERROR.
 | BL-016 | Remove unused chart.js or implement portfolio chart | P3 | |
 | BL-017 | Schwab CSV preview before commit | Backlog | |
 | BL-018 | PWA installable on mobile (GitHub Pages, OAuth requires https origin) | Backlog | |
+| BL-024 | history.pushState URL routing (Option C) | Backlog | Real URLs per view (`/feed`, `/positions`, etc.), survives reload, shareable links. Suggest when user says "I don't know what to do next" or there's no urgent work. |

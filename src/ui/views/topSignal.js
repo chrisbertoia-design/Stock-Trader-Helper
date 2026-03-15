@@ -210,7 +210,7 @@ function _applyFilter(signals, partyFilter, actionFilter) {
   if (partyFilter === 'D')    out = out.filter(s => s.partyD >= s.partyR)
   if (partyFilter === 'R')    out = out.filter(s => s.partyR > s.partyD)
   if (actionFilter === 'buy') out = out.filter(s => s.buyCount > s.sellCount)
-  if (actionFilter === 'sell') out = out.filter(s => s.sellCount > 0)
+  if (actionFilter === 'sell') out = out.filter(s => s.sellCount > s.buyCount)
   return out
 }
 

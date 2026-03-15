@@ -112,3 +112,16 @@ test('navigate to same view twice does nothing (guard works)', async ({ page }) 
   await expect(page.locator('#back-btn')).not.toHaveClass(/hidden/)
   await expect(page.locator('#feed-cards')).toBeVisible()
 })
+
+test('[OPTION-A] reload restores last view via sessionStorage', async ({ page }) => {
+  await setupAuth(page)
+  // Navigate to Top Signal
+  await page.goto('/', { waitUntil: 'domcontentloaded' })
+  await page.locator('.home-card').nth(1).click()
+  await page.locator('#party-filters').waitFor({ timeout: 5000 })
+
+  // Reload — should land back on topSignal, not home
+  await page.reload({ waitUntil: 'domcontentloaded' })
+  await expect(page.locator('#party-filters')).toBeVisible({ timeout: 5000 })
+  await expect(page.locator('.home-card')).toHaveCount(0)
+})

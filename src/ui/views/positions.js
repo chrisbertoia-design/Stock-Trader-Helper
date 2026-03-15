@@ -127,7 +127,15 @@ function _wireUpload(container, signal) {
     _setBtnState('Parsing…', true)
 
     const reader = new FileReader()
+
+    const _readTimeout = setTimeout(() => {
+      _setBtnState('Upload CSV', false)
+      showToast('File read timed out — please try again', 'error')
+    }, 15000)
+
     reader.onload = async (ev) => {
+      if (signal?.aborted || !container.isConnected) return
+      clearTimeout(_readTimeout)
       const csvText = ev.target.result
       let parsed = null
 
@@ -176,6 +184,7 @@ function _wireUpload(container, signal) {
               p.source
             ])
             await appendRows('my_positions', rows)
+            if (signal?.aborted || !container.isConnected) return
             info(CAT, `Wrote ${rows.length} positions to Sheets my_positions tab`)
           } catch (sheetsErr) {
             warn(CAT, `Sheets write failed (${sheetsErr.message}) — positions updated in-memory only`)
@@ -186,10 +195,12 @@ function _wireUpload(container, signal) {
         const count = Object.keys(parsed).length
         showToast(`${count} positions loaded`, 'success')
         if (!signal?.aborted && container.isConnected) await renderPositions(container, signal)
+        if (signal?.aborted || !container.isConnected) return
 
       } catch (err) {
         error(CAT, `CSV parse failed: ${err.message}`, err)
-        showToast('Could not parse CSV — use a Schwab transactions export', 'error')
+        const isAuthErr = /401|403|auth/i.test(err.message)
+        showToast(isAuthErr ? 'Auth error — try reconnecting Google' : 'Could not parse CSV — use a Schwab transactions export', 'error')
         _setBtnState('Upload CSV', false)
       }
 
@@ -197,6 +208,7 @@ function _wireUpload(container, signal) {
     }
 
     reader.onerror = () => {
+      clearTimeout(_readTimeout)
       error(CAT, 'FileReader error reading CSV')
       showToast('Could not read file', 'error')
       _setBtnState('Upload CSV', false)

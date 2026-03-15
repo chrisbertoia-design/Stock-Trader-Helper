@@ -46,7 +46,7 @@ export function renderWhatToBuy(container) {
   })
   container.querySelector('#pick-increment').addEventListener('click', () => {
     const inp = container.querySelector('#pick-count-display')
-    const val = Math.min(MOCK_PICKS.length, parseInt(inp.textContent, 10) + 1)
+    const val = Math.min(MAX_PICK_COUNT, parseInt(inp.textContent, 10) + 1)
     inp.textContent = val
     _updatePicksBtn(container)
   })
@@ -164,7 +164,7 @@ function _renderStep1() {
                 color:var(--text-secondary);
                 font-size:20px; cursor:pointer;
               ">+</button>
-              <span style="font-size:12px; color:var(--text-tertiary); margin-left:var(--s2);">${DEFAULT_PICK_COUNT} available</span>
+              <span style="font-size:12px; color:var(--text-tertiary); margin-left:var(--s2);">${MAX_PICK_COUNT} available</span>
             </div>
           </div>
 
