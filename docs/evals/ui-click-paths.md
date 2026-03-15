@@ -788,4 +788,71 @@ These tests target specific known failure modes. Run them in order after any cod
 
 ---
 
+## ### Epic 3 Regressions (Portfolio Accuracy)
+
+### Home — Portfolio Card Live Data
+
+- [ ] **[Home > Portfolio card > no CSV uploaded]**: Load app fresh, do not upload CSV
+  - **Before**: Home renders with mock data fallback
+  - **Expected**: Portfolio card shows `—` and "Upload CSV to see your real portfolio". No `$12.4k` or `8 positions` hardcoded text appears.
+  - **Regression**: Prevents MOCK_PORTFOLIO constant from showing stale fake data
+
+- [ ] **[Home > Portfolio card > after positions CSV upload]**: Upload a valid Schwab Positions snapshot CSV, then navigate back to Home
+  - **Before**: Portfolio card shows `—` empty state
+  - **Expected**: Card shows real account total (e.g. `$2.7k`), colored G/L %, and position count. "sample data" label does NOT appear.
+
+- [ ] **[Home > Portfolio card > mock active]**: Use app without uploading CSV (mock positions active)
+  - **Before**: Mock positions loaded from mockPositions.js
+  - **Expected**: Card shows total with `sample data` label in muted text next to the number. Tapping still navigates to positions view.
+
+### Positions — Zero-Quantity Filter
+
+- [ ] **[Positions > upload transactions CSV]**: Upload a Schwab Transactions (history) CSV
+  - **Before**: Positions view open
+  - **Expected**: Toast reads "N positions derived from M transactions". If all derived positions have qty < 0.001, the list shows the empty state message: "No positions to display. Upload a Schwab **Positions** CSV (not Transactions) to see your holdings."
+  - **Regression**: Prevents blank black screen when all filtered positions are zero-quantity
+
+- [ ] **[Positions > empty state message]**: Trigger empty list (upload transactions CSV with zero-qty results)
+  - **Before**: Stats show 0 positions
+  - **Expected**: Helpful message visible below stats row. No blank black void.
+
+- [ ] **[Positions > position count stat]**: Upload positions CSV with 30 valid positions
+  - **Before**: Stats row shows old count
+  - **Expected**: POSITIONS stat shows count matching the number of visible cards (not the raw Sheets row count)
+  - **Regression**: Prevents count showing 51 while list shows 0 cards
+
+### Positions — Format-Aware Toast
+
+- [ ] **[Positions > upload positions snapshot CSV]**: Upload Schwab Positions export
+  - **Expected**: Toast reads "N positions loaded from positions export"
+
+- [ ] **[Positions > upload transactions CSV]**: Upload Schwab Transactions export
+  - **Expected**: Toast reads "N positions derived from M transactions"
+
+### Positions — Stale Data Warning
+
+- [ ] **[Positions > stale warning > fresh data]**: Upload CSV today, view positions
+  - **Expected**: No stale warning shown. Subtitle shows "Updated YYYY-MM-DD" only.
+
+- [ ] **[Positions > stale warning > old data]**: View positions when last_csv_upload is 8+ days ago
+  - **Expected**: Amber `⚠ Data is N days old — upload a fresh CSV` appears below subtitle line
+
+- [ ] **[Positions > stale warning > mock data]**: View positions when using mock/sample data
+  - **Expected**: No stale warning shown regardless of date
+
+### What to Buy — 30 Picks
+
+- [ ] **[What to Buy > stepper max]**: Tap `+` button repeatedly from default (3)
+  - **Before**: Shows "3", "10 available"
+  - **Expected**: Can increment up to 30. Label shows "30 available". Cannot go above 30.
+
+- [ ] **[What to Buy > N picks = N cards]**: Set pick count to 7, submit $250
+  - **Before**: Step 1 showing
+  - **Expected**: Step 2 shows exactly 7 ranked pick cards and 7 rows in the Order Summary table.
+
+- [ ] **[What to Buy > minimum 1 pick]**: Tap `−` from 1
+  - **Expected**: Count stays at 1, does not go to 0.
+
+---
+
 *Last updated: 2026-03-15*

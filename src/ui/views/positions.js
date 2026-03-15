@@ -315,7 +315,7 @@ export async function renderPositions(container, signal, { skipLoad = false } = 
           <span class="stat-label">Total G/L</span>
         </div>
         <div class="stat">
-          <span class="stat-value">${summary.position_count}</span>
+          <span class="stat-value">${sortedPositions.length}</span>
           <span class="stat-label">Positions</span>
         </div>
         <div class="stat">
@@ -326,7 +326,12 @@ export async function renderPositions(container, signal, { skipLoad = false } = 
     </div>
 
     <div id="positions-list">
-      ${sortedPositions.map(pos => _renderPositionCard(pos)).join('')}
+      ${sortedPositions.length === 0
+        ? `<div style="padding:var(--s6) var(--s4); text-align:center; color:var(--text-tertiary); font-size:13px; line-height:1.6;">
+            No positions to display.<br>
+            <span style="font-size:12px;">Upload a Schwab <strong>Positions</strong> CSV (not Transactions) to see your holdings.</span>
+           </div>`
+        : sortedPositions.map(pos => _renderPositionCard(pos)).join('')}
     </div>
   `
 
