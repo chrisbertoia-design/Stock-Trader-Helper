@@ -32,8 +32,10 @@ const MOCK_AI_SUMMARIES = {
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
 function _relativeDate(dateStr) {
-  const diff = Date.now() - new Date(dateStr).getTime()
-  const days = Math.floor(diff / 86_400_000)
+  if (!dateStr) return 'unknown date'
+  const d = new Date(dateStr)
+  if (isNaN(d.getTime())) return 'unknown date'
+  const days = Math.floor((Date.now() - d.getTime()) / 86_400_000)
   if (days === 0) return 'today'
   if (days === 1) return 'yesterday'
   return `${days} days ago`
