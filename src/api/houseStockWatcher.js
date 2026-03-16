@@ -1,7 +1,7 @@
 /**
  * House Stock Watcher API
  * Source: https://housestockwatcher.com
- * Data: https://house-stock-watcher-data.s3-us-east-2.amazonaws.com/data/all_transactions.json
+ * Data: https://house-stock-watcher-data.s3.us-west-2.amazonaws.com/data/all_transactions.json
  *
  * Performance notes:
  *   - all_transactions.json is 30-50MB / 10,000+ records going back to 2012.
@@ -20,7 +20,7 @@ const CAT             = 'HSW_API'
 // In production, fetch directly from S3.
 const URL = import.meta.env.DEV
   ? '/api/hsw/all_transactions.json'
-  : 'https://house-stock-watcher-data.s3-us-west-2.amazonaws.com/data/all_transactions.json'
+  : 'https://house-stock-watcher-data.s3.us-west-2.amazonaws.com/data/all_transactions.json'
 const CACHE_KEY       = 'hsw_cache'
 const CACHE_TTL       = 60 * 60 * 1000   // 1 hour
 const FETCH_TIMEOUT   = 15_000            // 15s — abort if no response
