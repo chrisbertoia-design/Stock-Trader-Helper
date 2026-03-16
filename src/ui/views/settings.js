@@ -1,14 +1,17 @@
 /**
- * Settings view — mock-only for Phase 1.
- * Shows a static settings form with no live data or saves.
- * No API or store imports.
+ * Settings view — editable config fields persisted to Google Sheets.
+ * Reads config from the config store on render.
+ * On blur, Enter, or change (select), writes the updated value to Sheets immediately.
+ * Shows a toast on success/error.
  */
 
 import { showToast } from '../components/toast.js'
+import { getEditableConfig, set as writeConfigKey } from '../../stores/config.js'
+import { debug, warn } from '../../services/logger.js'
 
 const CAT = 'SETTINGS_VIEW'
 
-const MOCK_CONFIG = {
+const FALLBACK_CONFIG = {
   consensus_tier1_pct:   '0.05',
   consensus_tier2_pct:   '0.10',
   consensus_tier3_pct:   '0.25',
@@ -69,32 +72,95 @@ const SECTIONS = [
 ]
 
 export async function renderSettings(container, signal) {
-  const config = { ...MOCK_CONFIG }
+  // Read live config from the store; fall back to defaults if Sheets not connected
+  const liveConfig = getEditableConfig()
+  const config = { ...FALLBACK_CONFIG, ...liveConfig }
+
+  // Track current values to detect changes
+  const currentValues = { ...config }
 
   container.innerHTML = `
     <div style="max-width: 560px;">
       <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:var(--s5);">
         <h2 style="font-size:15px; font-weight:500;">Settings</h2>
-        <button class="btn btn-primary" id="save-settings">Save to Sheets</button>
+        <button class="btn btn-primary" id="save-settings">Save All</button>
       </div>
       ${SECTIONS.map(section => _renderSection(section, config)).join('')}
 
       <div style="margin-top:var(--s6); padding-top:var(--s4); border-top:1px solid var(--border-subtle);">
         <div style="font-size:12px; color:var(--text-tertiary);">
           Settings are stored in the <span style="font-family:var(--font-mono)">config</span> tab of your Google Sheet.
-          You can also edit them directly in Sheets.
-        </div>
-        <div style="font-size:11px; color:var(--accent); margin-top:4px;">
-          Live settings sync available in Phase 2
+          Changes save automatically on blur or Enter.
         </div>
       </div>
     </div>
   `
 
-  // Save button — show Phase 2 toast
   const opts = signal ? { signal } : {}
-  container.querySelector('#save-settings').addEventListener('click', () => {
-    showToast('Settings save available in Phase 2')
+
+  // ── Per-field save on blur (inputs) and change (selects) ──────────────────
+  async function _saveField(key, value) {
+    if (value === currentValues[key]) return  // no change
+    debug(CAT, `Saving config key: ${key} = ${value}`)
+    currentValues[key] = value
+    try {
+      await writeConfigKey(key, value)
+      showToast('Saved')
+    } catch (err) {
+      warn(CAT, `Failed to save ${key}: ${err.message}`)
+      showToast('Save failed', 'error')
+    }
+  }
+
+  // Attach blur + Enter listeners on all inputs
+  container.querySelectorAll('input[data-key]').forEach(input => {
+    input.addEventListener('blur', () => {
+      _saveField(input.dataset.key, input.value)
+    }, opts)
+
+    input.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault()
+        input.blur()  // triggers blur handler which saves
+      }
+    }, opts)
+  })
+
+  // Attach change listeners on all selects
+  container.querySelectorAll('select[data-key]').forEach(select => {
+    select.addEventListener('change', () => {
+      _saveField(select.dataset.key, select.value)
+    }, opts)
+  })
+
+  // ── Save All button — writes all fields that changed ──────────────────────
+  container.querySelector('#save-settings').addEventListener('click', async () => {
+    const fields = container.querySelectorAll('[data-key]')
+    let savedCount = 0
+    let errorCount = 0
+
+    for (const field of fields) {
+      const key = field.dataset.key
+      const value = field.value
+      if (value === currentValues[key]) continue
+
+      currentValues[key] = value
+      try {
+        await writeConfigKey(key, value)
+        savedCount++
+      } catch (err) {
+        warn(CAT, `Failed to save ${key}: ${err.message}`)
+        errorCount++
+      }
+    }
+
+    if (errorCount > 0) {
+      showToast(`Save failed for ${errorCount} field(s)`, 'error')
+    } else if (savedCount > 0) {
+      showToast('Saved')
+    } else {
+      showToast('No changes to save')
+    }
   }, opts)
 }
 
