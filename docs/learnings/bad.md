@@ -69,3 +69,13 @@ data looks correct in Sheets UI (shows formatted date), but API reads return the
 **Fix**: all writes use `valueInputOption: 'RAW'`. Added `_parseDateField()` serial guard on read for
 backward compat with rows written before the fix.
 **Detection tip**: if a date field reads back as a 5-digit number in range 40000-60000, it's a Sheets date serial.
+
+## 2026-03-16 | Settings view used hardcoded MOCK_CONFIG instead of reading from config store
+The settings view rendered config fields from a static `MOCK_CONFIG` object and the "Save to Sheets" button
+showed a "Phase 2 toast" placeholder. Edits were never persisted — the user could change values all day
+and they'd reset on navigation. The config store already had `getEditableConfig()` and `set(key, value)`
+ready to use, but settings.js never imported them.
+**Fix**: import `getEditableConfig` and `set` from config store. Read live config on render (with fallback
+defaults). Wire blur/Enter/change listeners on each field to call `set(key, value)` which writes to Sheets.
+**Lesson**: when building views in "mock-only Phase 1" mode, leave clear TODO markers about which store
+functions to wire. The settings view had no such markers, making it easy to forget the wiring was missing.

@@ -85,3 +85,18 @@ against writing DOM into a container that has already been replaced.
 `sth_last_view` in sessionStorage restores the active view on page reload within the same tab session.
 Using sessionStorage (not localStorage) means new tabs start fresh at home, which is correct behavior.
 **Reuse**: ephemeral per-tab state goes in sessionStorage; cross-session state goes in localStorage.
+
+## 2026-03-16 | Settings persistence via per-field blur/change saves
+Settings view wires `blur` (inputs) and `change` (selects) listeners to write individual config keys
+to Sheets immediately via `writeConfigKey()` from the config store. This avoids batching complexity
+and gives instant feedback ("Saved" toast per field). The config store's `set()` method updates the
+in-memory cache AND writes to Sheets, so subsequent reads within the same session see the new value.
+**Reuse**: for any settings UI that needs to persist to Sheets, prefer per-field save-on-blur over
+a monolithic "Save All" button — simpler code, better UX, no "unsaved changes" state to track.
+
+## 2026-03-16 | Playwright route mocking: use route.fulfill() not route.abort() for write tests
+When testing Sheets write operations, `route.abort()` causes the write to fail with a network error,
+making it impossible to test the success path. Use `route.fulfill()` with a mock 200 JSON response
+to simulate a successful Sheets API call. Pattern: `unrouteAll()` first to remove the default abort
+handler from `setupAuth()`, then add specific `route.fulfill()` handlers per URL pattern.
+**Reuse**: any Playwright test that needs to verify a successful API write.
