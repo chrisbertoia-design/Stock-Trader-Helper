@@ -180,7 +180,7 @@ export async function renderFeed(container, signal, { forceRefresh = false } = {
     let watchlistNames = WATCHLIST.filter(w => w.active === 'Y').map(w => w.name)
     try {
       const rows = await readTab('watchlist')
-      const sheetsNames = rows.filter(r => r[8]?.toUpperCase() === 'Y').map(r => r[1]).filter(Boolean)
+      const sheetsNames = rows.filter(r => r[3]?.toUpperCase() === 'Y').map(r => r[0]).filter(Boolean)
       if (sheetsNames.length > 0) {
         watchlistNames = sheetsNames
         debug(CAT, `Watchlist from Sheets: ${watchlistNames.length} active members`)
@@ -191,8 +191,10 @@ export async function renderFeed(container, signal, { forceRefresh = false } = {
       warn(CAT, `Watchlist load failed: ${wlErr.message} — using seed watchlist`)
     }
 
-    // Filter to watchlist members, last 30 days
-    const filteredTrades = filterByWatchlist(allTransactions, watchlistNames, { daysBack: 30 })
+    // Filter to watchlist members — use 90-day window to match cache.
+    // Congressional disclosures lag 30–45 days after the trade, so a
+    // 30-day transaction_date filter silently drops most recent disclosures.
+    const filteredTrades = filterByWatchlist(allTransactions, watchlistNames, { daysBack: 90 })
     debug(CAT, `Filtered to ${filteredTrades.length} trades in last 30 days`)
 
     if (filteredTrades.length === 0) {
