@@ -1,0 +1,65 @@
+{
+  "generated_at": "2026-03-20T00:00:00.000Z",
+  "trades": [
+    {
+      "id": "Pelosi_NVDA_2026-03-11",
+      "politician_name": "Nancy Pelosi",
+      "party": "D",
+      "ticker": "NVDA",
+      "action": "buy",
+      "amount_low": 250001,
+      "amount_high": 500000,
+      "transaction_date": "2026-03-11",
+      "disclosed_date": "2026-03-13",
+      "sp500": "Y"
+    },
+    {
+      "id": "Gottheimer_MSFT_2026-03-10",
+      "politician_name": "Josh Gottheimer",
+      "party": "D",
+      "ticker": "MSFT",
+      "action": "buy",
+      "amount_low": 15001,
+      "amount_high": 50000,
+      "transaction_date": "2026-03-10",
+      "disclosed_date": "2026-03-12",
+      "sp500": "Y"
+    },
+    {
+      "id": "Khanna_AAPL_2026-03-08",
+      "politician_name": "Ro Khanna",
+      "party": "D",
+      "ticker": "AAPL",
+      "action": "sell",
+      "amount_low": 50001,
+      "amount_high": 100000,
+      "transaction_date": "2026-03-08",
+      "disclosed_date": "2026-03-11",
+      "sp500": "Y"
+    },
+    {
+      "id": "Tuberville_AMD_2026-03-07",
+      "politician_name": "Tommy Tuberville",
+      "party": "R",
+      "ticker": "AMD",
+      "action": "buy",
+      "amount_low": 100001,
+      "amount_high": 250000,
+      "transaction_date": "2026-03-07",
+      "disclosed_date": "2026-03-10",
+      "sp500": "N"
+    },
+    {
+      "id": "Pelosi_TSM_2026-03-05",
+      "politician_name": "Nancy Pelosi",
+      "party": "D",
+      "ticker": "TSM",
+      "action": "buy",
+      "amount_low": 500001,
+      "amount_high": 1000000,
+      "transaction_date": "2026-03-05",
+      "disclosed_date": "2026-03-09",
+      "sp500": "N"
+    }
+  ]
+}

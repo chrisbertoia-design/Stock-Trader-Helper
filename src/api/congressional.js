@@ -1,14 +1,15 @@
 /**
  * Congressional Trades API
- * Fetches recent US congressional stock trades via Anthropic Claude (web_search tool).
- * Replaces the dead House Stock Watcher S3 data source.
+ * Fetches congressional stock trades from a pre-generated static JSON file.
+ * The JSON is built at deploy time by `scripts/generate-trades.js` (GitHub Actions)
+ * and served as a same-origin asset — no CORS issues on any browser.
  *
  * Performance notes:
- *   - Anthropic API call includes web_search tool — latency is higher than a direct fetch.
- *   - 30s AbortController timeout to handle slow web search turns.
- *   - 1-hour localStorage cache to avoid repeated API calls.
+ *   - Static file fetch completes in < 1s (same origin, CDN-cached).
+ *   - 10s AbortController timeout as a safety net.
+ *   - 1-hour localStorage cache to avoid repeated fetches.
  *   - In-flight dedup: concurrent callers share one promise.
- *   - Normalized output shape is identical to houseStockWatcher.js so feed.js only changes the import path.
+ *   - Normalized output shape is identical to houseStockWatcher.js so feed.js needs no changes.
  */
 
 import { debug, info, warn, error } from '../services/logger.js'
@@ -16,11 +17,10 @@ import { debug, info, warn, error } from '../services/logger.js'
 const CAT              = 'CONGRESSIONAL_API'
 const CACHE_KEY        = 'congressional_cache'
 const CACHE_TTL        = 60 * 60 * 1000   // 1 hour
-const FETCH_TIMEOUT    = 15_000            // 15s — plain completion, no web search
+const FETCH_TIMEOUT    = 10_000            // 10s — static file fetch
 const DATA_WINDOW_DAYS = 90               // trim to last 90 days
 
-const ANTHROPIC_ENDPOINT = 'https://api.anthropic.com/v1/messages'
-const ANTHROPIC_MODEL    = 'claude-haiku-4-5-20251001'
+const TRADES_URL = import.meta.env.BASE_URL + 'congressional-trades.json'
 
 let _fetchInFlight = null   // dedup: concurrent callers share one request
 
@@ -122,85 +122,27 @@ export function computeConsensusSignals(transactions, { config, partyRoster }) {
 // ─── Network fetch ────────────────────────────────────────────────────────────
 
 async function _fetchFromNetwork() {
-  const apiKey = import.meta.env.VITE_ANTHROPIC_API_KEY
-  if (!apiKey) warn(CAT, 'VITE_ANTHROPIC_API_KEY is not set — request will fail with 401')
-
-  info(CAT, `Fetching congressional trades via Anthropic API (last ${DATA_WINDOW_DAYS} days)`)
+  info(CAT, `Fetching congressional trades from ${TRADES_URL}`)
 
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT)
 
-  // Ask the model directly — no web_search tool needed.
-  // Training data includes real STOCK Act disclosures through mid-2025.
-  const prompt = `You are a data API. Return a JSON array of recent US congressional stock trades
-(House and Senate, all parties) based on your training data of STOCK Act Periodic Transaction Reports.
-
-Return ONLY a valid JSON array. No explanation, no markdown, no code fences. Start with [ and end with ].
-
-Each object must have exactly these fields:
-{
-  "id": "unique string — politician last name + ticker + date, e.g. Pelosi_NVDA_2025-01-15",
-  "politician_name": "First Last",
-  "party": "D" or "R" or "U",
-  "ticker": "UPPERCASE_SYMBOL",
-  "action": "buy" or "sell",
-  "amount_low": number from this set: 1001, 15001, 50001, 100001, 250001, 500001, 1000001,
-  "amount_high": number from this set: 15000, 50000, 100000, 250000, 500000, 1000000, 5000000,
-  "transaction_date": "YYYY-MM-DD",
-  "disclosed_date": "YYYY-MM-DD",
-  "sp500": "Y" or "N"
-}
-
-Include real politicians (Nancy Pelosi, Josh Gottheimer, Dan Crenshaw, Tommy Tuberville, etc.).
-Return 30 trades from 2024-2025. Sort by transaction_date descending.`
-
   try {
-    const res = await fetch(ANTHROPIC_ENDPOINT, {
-      method: 'POST',
-      signal: controller.signal,
-      headers: {
-        'content-type':                        'application/json',
-        'x-api-key':                           apiKey,
-        'anthropic-version':                   '2023-06-01',
-        'anthropic-dangerous-direct-browser-ipc': 'true'
-      },
-      body: JSON.stringify({
-        model:      ANTHROPIC_MODEL,
-        max_tokens: 4096,
-        messages: [{ role: 'user', content: prompt }]
-      })
-    })
+    const res = await fetch(TRADES_URL, { signal: controller.signal })
     clearTimeout(timer)
 
     if (!res.ok) {
-      const body = await res.text().catch(() => '')
-      throw new Error(`Anthropic API HTTP ${res.status}: ${body.slice(0, 200)}`)
+      throw new Error(`congressional-trades.json HTTP ${res.status}`)
     }
 
-    const responseJson = await res.json()
-    debug(CAT, 'Anthropic raw response', { stop_reason: responseJson.stop_reason, content_blocks: responseJson.content?.length })
+    const json = await res.json()
+    const rawTrades = json.trades
 
-    // Extract the last text block from the content array
-    const content = responseJson.content || []
-    const textBlocks = content.filter(b => b.type === 'text')
-    if (textBlocks.length === 0) throw new Error('No text block in Anthropic response')
-
-    const lastText = textBlocks[textBlocks.length - 1].text || ''
-    debug(CAT, `Parsing JSON from text block (${lastText.length} chars)`)
-
-    // Parse the JSON array from the text
-    let rawTrades
-    if (lastText.trimStart().startsWith('[')) {
-      rawTrades = JSON.parse(lastText.trim())
-    } else {
-      const match = lastText.match(/\[[\s\S]*\]/)
-      if (!match) throw new Error('No JSON array found in Anthropic response text')
-      rawTrades = JSON.parse(match[0])
+    if (!Array.isArray(rawTrades)) {
+      throw new Error('congressional-trades.json: "trades" field is not an array')
     }
 
-    if (!Array.isArray(rawTrades)) throw new Error('Parsed Anthropic response is not an array')
-
-    info(CAT, `Anthropic returned ${rawTrades.length} raw trade records — normalizing...`)
+    info(CAT, `Static file returned ${rawTrades.length} raw trade records — normalizing...`)
 
     const cutoffMs = Date.now() - DATA_WINDOW_DAYS * 86_400_000
     const normalized = rawTrades
@@ -215,7 +157,7 @@ Return 30 trades from 2024-2025. Sort by transaction_date descending.`
   } catch (err) {
     clearTimeout(timer)
     const msg = err.name === 'AbortError'
-      ? `Congressional API fetch timed out after ${FETCH_TIMEOUT / 1000}s`
+      ? `Congressional trades fetch timed out after ${FETCH_TIMEOUT / 1000}s`
       : err.message
     // console.error ensures visibility even when Sheets logger hasn't flushed
     console.error('[CONGRESSIONAL_API] fetch failed:', msg)
