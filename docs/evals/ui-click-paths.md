@@ -114,7 +114,17 @@
 
 - [ ] **[Feed > Entry path]**: From Home, tap "What's New" tile
   - **Before**: Home view
-  - **Expected**: Feed view renders with skeleton immediately. After data loads, header shows ← back button and ⚙ button. "Recent Trades" heading visible. Subtitle reads "N disclosures · last 30 days" (live) or the mock subtitle. The first 5 trade cards are visible in default collapsed state. If more than 5 trades exist, a "Show more (N remaining)" button appears below the fifth card.
+  - **Expected**: Feed view renders with skeleton immediately. After data loads, header shows ← back button and ⚙ button. "Recent Trades" heading visible. Subtitle reads "N disclosures · last 90 days" (live) or the mock subtitle. The first 5 trade cards are visible in default collapsed state. If more than 5 trades exist, a "Show more (N remaining)" button appears below the fifth card.
+
+- [ ] **[Feed > Header subtitle]**: Open Feed and read the subtitle text below "Recent Trades" after data loads
+  - **Before**: Feed skeleton cleared; live or mock data is displayed
+  - **Expected**: Subtitle contains "last 90 days" — for example "N disclosures · last 90 days". It must NOT say "last 30 days".
+  - **Regression**: Subtitle was hardcoded "last 30 days" even though the trade filter uses a 90-day window; the string was corrected to match the actual filter.
+
+- [ ] **[Feed > Trade count]**: Open Feed after deploy and count visible trade cards
+  - **Before**: Feed has loaded (live or seed data)
+  - **Expected**: More than 5 trades are visible — either directly or after tapping "Show more" once. If seed data is active, there should be 30 trades spread across the last 90 days, so "Show more" will be present and tapping it reveals additional cards beyond the initial 5. At minimum, at least 6 cards should be reachable.
+  - **Regression**: generate-trades.js was prompted to produce 2024-dated trades which fell outside the 90-day filter window, leaving only 5 seed trades visible and hiding all remaining cards.
 
 ### Trade Cards — Initial State
 
@@ -981,7 +991,8 @@ These tests target specific known failure modes. Run them in order after any cod
 
 - [ ] **[Feed > Live > subtitle format]**: Wait for HSW fetch to complete successfully with watchlist results
   - **Before**: Skeleton was showing; fetch just resolved with N > 0 trades
-  - **Expected**: Subtitle changes from "Loading congressional trades…" to "N disclosures · last 30 days" where N is the actual count of visible (non-ignored) trades. If exactly 1 disclosure, reads "1 disclosure · last 30 days" (singular). If 5 disclosures, reads "5 disclosures · last 30 days".
+  - **Expected**: Subtitle changes from "Loading congressional trades…" to "N disclosures · last 90 days" where N is the actual count of visible (non-ignored) trades. If exactly 1 disclosure, reads "1 disclosure · last 90 days" (singular). If 5 disclosures, reads "5 disclosures · last 90 days".
+  - **Regression**: Subtitle was hardcoded "last 30 days" even though the filter window is 90 days.
 
 - [ ] **[Feed > Live > no mock banner]**: Observe the area below the subtitle after live data loads
   - **Before**: Live HSW data loaded successfully (N > 0 watchlist results)
@@ -1071,9 +1082,10 @@ These tests target specific known failure modes. Run them in order after any cod
   - **Before**: Live data; Sheets watchlist does not include e.g. "Mitch McConnell"
   - **Expected**: No card for Mitch McConnell (or any other off-watchlist politician) appears in the feed, even if HSW returned trades for that politician within the past 30 days.
 
-- [ ] **[Feed > Watchlist > 30-day window]**: Verify trades older than 30 days are excluded
-  - **Before**: Live data loaded; some HSW transactions have `transaction_date` older than 30 days ago
-  - **Expected**: No card appears for a transaction dated more than 30 days before today. Only trades within the rolling 30-day window appear. Count in subtitle reflects only the 30-day window.
+- [ ] **[Feed > Watchlist > 90-day window]**: Verify trades older than 90 days are excluded
+  - **Before**: Live data loaded; some HSW transactions have `transaction_date` older than 90 days ago
+  - **Expected**: No card appears for a transaction dated more than 90 days before today. Only trades within the rolling 90-day window appear. Count in subtitle reflects only the 90-day window ("N disclosures · last 90 days").
+  - **Regression**: Subtitle previously said "last 30 days" while the filter used 90 days; both are now aligned at 90 days.
 
 - [ ] **[Feed > Watchlist > Sheets watchlist takes priority over seed]**: Authenticated user with a populated `watchlist` Sheets tab
   - **Before**: Sheets tab has active members; seed WATCHLIST constant also has members
@@ -1161,7 +1173,7 @@ These tests target specific known failure modes. Run them in order after any cod
 
 - [ ] **[Feed > Empty State > correct subtitle when empty]**: Observe the subtitle when the empty state is displayed
   - **Before**: All trades ignored; empty state rendered
-  - **Expected**: The "Recent Trades" heading and subtitle are still shown above the empty-state message. If on live data, subtitle reads "0 disclosures · last 30 days". If on mock data, subtitle reads "Sample data — connect Google to load live trades".
+  - **Expected**: The "Recent Trades" heading and subtitle are still shown above the empty-state message. If on live data, subtitle reads "0 disclosures · last 90 days". If on mock data, subtitle reads "Sample data — connect Google to load live trades".
 
 - [ ] **[Feed > Empty State > persists on return]**: After ignoring all trades, navigate to Home and return to Feed
   - **Before**: Empty state was the last Feed render before navigating away
@@ -1181,7 +1193,7 @@ These tests target specific known failure modes. Run them in order after any cod
 
 - [ ] **[Feed > Regression > ignore 3 → home → return count]**: Ignore exactly 3 trade cards, navigate to Home, then return to Feed
   - **Before**: 3 trades ignored; Feed re-renders
-  - **Expected**: The 3 ignored cards are absent. If there were originally 5 mock cards, now 2 are shown. Subtitle reads "2 disclosures · last 30 days" (or mock equivalent with count 2). Ignored trade IDs remain in localStorage.
+  - **Expected**: The 3 ignored cards are absent. If there were originally 5 mock cards, now 2 are shown. Subtitle reads "2 disclosures · last 90 days" (or mock equivalent with count 2). Ignored trade IDs remain in localStorage.
 
 - [ ] **[Feed > Regression > ignore 3 → home → return DOM check]**: After returning from Home, inspect the DOM for ignored card elements
   - **Before**: 3 trades were ignored before navigating away
@@ -1202,6 +1214,17 @@ These tests target specific known failure modes. Run them in order after any cod
 - [ ] **[Feed > Regression > skeleton replaced on error]**: Trigger HSW fetch failure (offline)
   - **Before**: Skeleton showing 6 shimmer cards
   - **Expected**: After the error, all 6 shimmer cards are replaced by real mock trade cards. No shimmer card remains in the DOM. The error toast fires once. The mock banner appears. The subtitle is the mock subtitle text.
+
+---
+
+---
+
+## ### Logging / Observability
+
+- [ ] **[Sheets log > API entry]**: Open the app, navigate to Feed, and wait for trades to finish loading. Then open the connected Google Sheet and inspect the `log` tab.
+  - **Before**: App just navigated to Feed; HSW fetch resolved successfully
+  - **Expected**: At least one row is present in the `log` tab with all 6 columns populated: column A = ISO timestamp (e.g. `2026-03-20T14:05:00.000Z`), column B = level (`INFO` or `DEBUG`), column C = category (`CONGRESSIONAL_API`), column D = message (`Raw API response received`), column E = any context string, column F = JSON object containing a `trade_count` key. Column A must NOT be empty — the timestamp must appear in the first column, not shifted to column B.
+  - **Regression**: The logger re-entrancy guard (`_writing` flag) was buffering new entries while a Sheets write was in progress and never draining the buffer. As a result, log entries generated during `appendRows` calls (including API response logs) were silently dropped and never written to the Sheet. Additionally, the last row of each batch had an empty column A because the timestamp was being shifted one column right. Both issues are resolved — buffer drains after each write, and column ordering is stable.
 
 ---
 
