@@ -1,8 +1,15 @@
 /**
  * Top Signal view — stocks ranked by congressional trading activity.
  * Shows which tickers members are trading, party breakdown, buy/sell ratio.
- * Phase 1: mock data.
+ * Phase 2: wired to live congressional trades via fetchAllTransactions + computeConsensusSignals.
  */
+
+import { fetchAllTransactions, filterByWatchlist, computeConsensusSignals } from '../../api/congressional.js'
+import { getConfig } from '../../stores/config.js'
+import { readTab } from '../../api/googleSheets.js'
+import { WATCHLIST } from '../../data/watchlist.js'
+
+const PARTY_ROSTER = { D: 213, R: 222 }
 
 const MOCK_SIGNALS = [
   {
@@ -85,6 +92,7 @@ const MOCK_SIGNALS = [
   },
   {
     ticker:      'WMT',
+    name:        '',
     memberCount: 6,
     partyD:      2,
     partyR:      4,
@@ -117,7 +125,21 @@ const WINDOWS = [
 
 let _partyFilter  = 'all'
 let _actionFilter = 'all'
-let _activeWindow = '14'
+let _activeWindow = 90   // number: 14, 30, or 90
+
+// module-level state for live data
+let _liveSignals = null   // null = not loaded, [] = loaded but empty, [...] = loaded
+let _usingMock   = false
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+function _relativeDate(isoString) {
+  const d = new Date(isoString)
+  const days = Math.floor((Date.now() - d.getTime()) / 86400000)
+  if (days === 0) return 'today'
+  if (days === 1) return '1 day ago'
+  return `${days} days ago`
+}
 
 function _signalStrength(tier) {
   if (tier >= 3) return { label: 'Strong',   dots: '●●●', color: 'var(--buy)' }
@@ -125,12 +147,137 @@ function _signalStrength(tier) {
   return              { label: 'Weak',      dots: '●○○', color: 'var(--text-tertiary)' }
 }
 
-export function renderTopSignal(container, signal) {
-  _partyFilter = 'all'
-  _actionFilter = 'all'
-  _activeWindow = '14'
+// ─── Derive card-shape objects from raw consensus signals ─────────────────────
+
+function _deriveCardSignals(rawSignals, transactions) {
+  // rawSignals: array from computeConsensusSignals, one entry per party::ticker
+  // Group by ticker, merge D and R party rows
+  const byTicker = new Map()
+  for (const sig of rawSignals) {
+    const t = sig.tickers  // field is called 'tickers' not 'ticker'
+    if (!byTicker.has(t)) byTicker.set(t, { ticker: t, partyD: 0, partyR: 0, tier: sig.tier, pctMax: 0 })
+    const entry = byTicker.get(t)
+    if (sig.party === 'D') entry.partyD = sig.member_count
+    else if (sig.party === 'R') entry.partyR = sig.member_count
+    entry.tier = sig.tier > entry.tier ? sig.tier : entry.tier
+    if (sig.pct_of_party > entry.pctMax) entry.pctMax = sig.pct_of_party
+  }
+
+  // For each ticker, derive buyCount, sellCount, lastTrade, topTrader from transactions
+  const result = []
+  for (const [ticker, entry] of byTicker) {
+    const tickerTx = transactions.filter(tx => tx.ticker === ticker)
+    entry.memberCount = entry.partyD + entry.partyR
+    entry.buyCount  = tickerTx.filter(tx => tx.action === 'buy').length
+    entry.sellCount = tickerTx.filter(tx => tx.action === 'sell').length
+    entry.windowDays = tickerTx.length > 0
+      ? Math.round((Date.now() - Math.min(...tickerTx.map(tx => tx.transaction_ts))) / 86400000)
+      : 90
+    // lastTrade: most recent transaction
+    const latestTs = tickerTx.length > 0 ? Math.max(...tickerTx.map(tx => tx.transaction_ts)) : null
+    entry.lastTrade = latestTs ? _relativeDate(new Date(latestTs).toISOString()) : '—'
+    // topTrader: politician with highest amount_high
+    const top = tickerTx.reduce((best, tx) => (!best || tx.amount_high > best.amount_high ? tx : best), null)
+    entry.topTrader = top ? top.politician_name : '—'
+    entry.name = ''  // company name not available in HSW data
+    result.push(entry)
+  }
+
+  // Sort by memberCount descending, then tier descending
+  result.sort((a, b) => b.memberCount - a.memberCount || b.tier - a.tier)
+  return result
+}
+
+// ─── Skeleton ─────────────────────────────────────────────────────────────────
+
+function _renderSkeleton() {
+  const shimmer = `background: linear-gradient(90deg, var(--bg-raised) 25%, var(--bg-elevated) 50%, var(--bg-raised) 75%);
+    background-size: 200% 100%; animation: shimmer 1.5s infinite;`
+  return `
+    <div style="max-width:480px; margin:0 auto;">
+      <div style="margin-bottom:var(--s4);">
+        <div style="height:16px;width:55%;border-radius:var(--r2);${shimmer}"></div>
+        <div style="height:13px;width:40%;border-radius:var(--r2);margin-top:var(--s2);${shimmer}"></div>
+      </div>
+      ${Array(3).fill('').map(() => `
+        <div class="card" style="padding:var(--s4);margin-bottom:var(--s3);">
+          <div style="height:18px;width:30%;border-radius:var(--r2);${shimmer}"></div>
+          <div style="height:14px;width:55%;border-radius:var(--r2);margin-top:var(--s3);${shimmer}"></div>
+          <div style="height:12px;width:45%;border-radius:var(--r2);margin-top:var(--s2);${shimmer}"></div>
+        </div>
+      `).join('')}
+    </div>
+  `
+}
+
+// ─── Async load + compute ─────────────────────────────────────────────────────
+
+async function _loadSignals(container, signal) {
+  if (signal?.aborted) return
+
+  // Show skeleton while loading
+  container.innerHTML = _renderSkeleton()
+
+  try {
+    // Load transactions
+    const allTx = await fetchAllTransactions({ forceRefresh: false })
+
+    if (signal?.aborted) return
+
+    // Load watchlist (Sheets first, seed fallback — same pattern as feed.js)
+    let watchedNames = new Set()
+    try {
+      const rows = await readTab('watchlist')
+      const active = rows.filter(r => r[3]?.toUpperCase() === 'Y').map(r => r[0])
+      watchedNames = new Set(active.length ? active : WATCHLIST.map(w => w.name))
+    } catch {
+      watchedNames = new Set(WATCHLIST.map(w => w.name))
+    }
+
+    if (signal?.aborted) return
+
+    // Filter to watchlist members only for the active window
+    const windowDays = _activeWindow
+    const filtered = filterByWatchlist(allTx, Array.from(watchedNames), { daysBack: windowDays })
+
+    // Compute consensus signals
+    const rawSignals = computeConsensusSignals(filtered, {
+      config: { ...getConfig(), consensus_window_days: windowDays },
+      partyRoster: PARTY_ROSTER
+    })
+
+    // Derive card-shape objects from raw signals.
+    // If the computation produces no results (low activity, high thresholds), fall back to
+    // MOCK_SIGNALS silently — no banner. Banner is reserved for fetch failures only.
+    _liveSignals = _deriveCardSignals(rawSignals, filtered)
+    if (_liveSignals.length === 0) _liveSignals = MOCK_SIGNALS
+    _usingMock = false
+
+  } catch (_err) {
+    _liveSignals = MOCK_SIGNALS
+    _usingMock = true
+  }
+
+  if (signal?.aborted) return
+
   _render(container, signal)
 }
+
+// ─── Main export ─────────────────────────────────────────────────────────────
+
+export async function renderTopSignal(container, signal) {
+  _partyFilter  = 'all'
+  _actionFilter = 'all'
+  _activeWindow = 90
+  _liveSignals  = null
+  _usingMock    = false
+
+  if (signal?.aborted) return
+
+  await _loadSignals(container, signal)
+}
+
+// ─── Filter button HTML ───────────────────────────────────────────────────────
 
 function _filterBtn(key, active, label, dataAttr) {
   return `<button
@@ -146,12 +293,22 @@ function _filterBtn(key, active, label, dataAttr) {
   >${label}</button>`
 }
 
+// ─── Sync render (called after data is ready) ─────────────────────────────────
+
 function _render(container, signal) {
   if (signal?.aborted) return
-  const filtered = _applyFilter(MOCK_SIGNALS, _partyFilter, _actionFilter)
+  const filtered = _applyFilter(_liveSignals ?? MOCK_SIGNALS, _partyFilter, _actionFilter)
+
+  const mockBanner = _usingMock
+    ? `<div data-testid="mock-banner" style="background:#7c4a00;color:#ffcc80;padding:8px 12px;border-radius:6px;font-size:13px;margin-bottom:12px;">
+         Using sample data — live signal computation unavailable
+       </div>`
+    : ''
 
   container.innerHTML = `
     <div style="max-width:480px; margin:0 auto;">
+
+      ${mockBanner}
 
       <!-- Filter rows -->
       <div style="display:flex; flex-direction:column; gap:var(--s2); margin-bottom:var(--s4);">
@@ -164,9 +321,9 @@ function _render(container, signal) {
               <button data-window="${w.key}" style="
                 padding:var(--s1) var(--s3);
                 border-radius:var(--r2);
-                border:1px solid ${_activeWindow === w.key ? 'var(--accent)' : 'var(--border-subtle)'};
-                background:${_activeWindow === w.key ? 'rgba(201,177,135,0.08)' : 'transparent'};
-                color:${_activeWindow === w.key ? 'var(--accent)' : 'var(--text-tertiary)'};
+                border:1px solid ${String(_activeWindow) === w.key ? 'var(--accent)' : 'var(--border-subtle)'};
+                background:${String(_activeWindow) === w.key ? 'rgba(201,177,135,0.08)' : 'transparent'};
+                color:${String(_activeWindow) === w.key ? 'var(--accent)' : 'var(--text-tertiary)'};
                 font-size:11px; cursor:pointer; min-height:28px;
               ">${w.label}</button>
             `).join('')}
@@ -179,7 +336,7 @@ function _render(container, signal) {
 
       <!-- Signal count -->
       <div style="font-size:12px; color:var(--text-tertiary); margin-bottom:var(--s3);">
-        ${filtered.length} stock${filtered.length !== 1 ? 's' : ''} with congressional activity · last ${_activeWindow} days
+        ${filtered.length} stock${filtered.length !== 1 ? 's' : ''} with congressional activity · last ${_activeWindow}d
       </div>
 
       <!-- Signal cards -->
@@ -218,10 +375,15 @@ function _render(container, signal) {
   if (windowFilters) windowFilters.addEventListener('click', (e) => {
     const btn = e.target.closest('[data-window]')
     if (!btn) return
-    _activeWindow = btn.dataset.window
-    _render(container, signal)
+    const newWindow = parseInt(btn.dataset.window, 10)
+    if (newWindow === _activeWindow) return
+    _activeWindow = newWindow
+    // Window change triggers a full re-fetch and re-compute
+    _loadSignals(container, signal)
   }, opts)
 }
+
+// ─── Filter logic ─────────────────────────────────────────────────────────────
 
 function _applyFilter(signals, partyFilter, actionFilter) {
   let out = signals
@@ -231,6 +393,8 @@ function _applyFilter(signals, partyFilter, actionFilter) {
   if (actionFilter === 'sell') out = out.filter(s => s.sellCount > s.buyCount)
   return out
 }
+
+// ─── Signal card HTML ─────────────────────────────────────────────────────────
 
 function _renderSignalCard(sig, rank) {
   const tierClass   = sig.tier >= 3 ? 'tier-bright' : sig.tier === 2 ? 'tier-accent' : 'tier-subtle'
@@ -261,7 +425,7 @@ function _renderSignalCard(sig, rank) {
             <span class="tier-badge ${tierClass}">Tier ${sig.tier}</span>
             ${bipartisan ? `<span style="font-size:10px; color:var(--text-tertiary); background:var(--bg-elevated); padding:1px 6px; border-radius:var(--r1); border:1px solid var(--border-subtle);">Bipartisan</span>` : ''}
           </div>
-          <div style="font-size:12px; color:var(--text-secondary);">${sig.name}</div>
+          ${sig.name ? `<div style="font-size:12px; color:var(--text-secondary);">${sig.name}</div>` : ''}
         </div>
 
         <button

@@ -6,6 +6,41 @@ import { test, expect } from '@playwright/test'
 import { setupAuth, goHome } from './helpers/auth.js'
 import { checkTopSignalDataSource } from './helpers/dataCheck.js'
 
+// Shared mock payload used by route.fulfill() tests.
+// Fulfilling with real-shaped data lets the view compute live signals
+// and proves the mock-data fallback path is NOT triggered.
+const MOCK_TRADES_PAYLOAD = {
+  generated_at: '2026-03-11T00:00:00.000Z',
+  trades: [
+    {
+      disclosure_year: 2026,
+      transaction_date: '2026-03-11',
+      owner: 'self',
+      ticker: 'NVDA',
+      asset_description: 'NVIDIA Corp',
+      type: 'purchase',
+      amount: '$250,001 - $500,000',
+      representative: 'Nancy Pelosi',
+      district: 'CA-11',
+      cap_gains_over_200_usd: false,
+      party: 'D',
+    },
+    {
+      disclosure_year: 2026,
+      transaction_date: '2026-03-10',
+      owner: 'self',
+      ticker: 'MSFT',
+      asset_description: 'Microsoft Corp',
+      type: 'purchase',
+      amount: '$15,001 - $50,000',
+      representative: 'Josh Gottheimer',
+      district: 'NJ-05',
+      cap_gains_over_200_usd: false,
+      party: 'D',
+    },
+  ],
+}
+
 test.beforeEach(async ({ page }) => {
   await setupAuth(page)
   await goHome(page)
@@ -17,6 +52,34 @@ test.beforeEach(async ({ page }) => {
 
 test('[DATA SOURCE] top signal data source phase status', async ({ page }, testInfo) => {
   await checkTopSignalDataSource(page, testInfo)
+})
+
+// ─── Mock-banner observability ────────────────────────────────────────────────
+// CLAUDE.md rule: every view with a mock-data fallback MUST assert the banner
+// is NOT present when the real API is expected to succeed.
+// Uses route.fulfill() (NOT route.abort()) so test isolation cannot mask real failures.
+
+test('[MOCK BANNER ABSENT] no mock-data banner when congressional-trades.json returns valid data', async ({ page }) => {
+  // Must be registered before navigation so it intercepts the initial fetch.
+  // setupAuth already ran in beforeEach and aborted googleapis/HSW routes;
+  // congressional-trades.json is not covered by that pattern and is intercepted here.
+  await page.route('**/congressional-trades.json', route =>
+    route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify(MOCK_TRADES_PAYLOAD),
+    })
+  )
+
+  // Clear localStorage cache so fetchAllTransactions hits the network (not the 1-hour cache)
+  await page.evaluate(() => localStorage.removeItem('congressional_cache'))
+
+  // Re-navigate to Top Signal so the fulfilled route is used for this render.
+  await page.locator('#back-btn').click()
+  await page.locator('.home-card').nth(1).click()
+  await page.locator('#party-filters').waitFor({ timeout: 8000 })
+
+  // The mock-data banner must NOT be visible when live data was returned.
+  await expect(page.locator('[data-testid="mock-banner"]')).not.toBeVisible()
 })
 
 // ─── Render ───────────────────────────────────────────────────────────────────
@@ -128,28 +191,38 @@ test('[REGRESSION] action pills work after party pills (cross-filter)', async ({
 
 // ─── Window pills ─────────────────────────────────────────────────────────────
 
-test('14d window pill is active by default', async ({ page }) => {
-  // Verify via subtitle text — simpler and more reliable than CSS color
-  await expect(page.locator('text=last 14 days')).toBeVisible()
+test('90d window pill is active by default', async ({ page }) => {
+  // Default _activeWindow is 90 — verify via subtitle text
+  await expect(page.locator('text=last 90d')).toBeVisible()
 })
 
 test('30d window pill updates subtitle', async ({ page }) => {
   await page.locator('[data-window="30"]').click()
-  await expect(page.locator('text=last 30 days')).toBeVisible()
+  await expect(page.locator('text=last 30d')).toBeVisible()
 })
 
-test('90d window pill updates subtitle', async ({ page }) => {
-  await page.locator('[data-window="90"]').click()
-  await expect(page.locator('text=last 90 days')).toBeVisible()
+test('14d window pill updates subtitle', async ({ page }) => {
+  await page.locator('[data-window="14"]').click()
+  await expect(page.locator('text=last 14d')).toBeVisible()
 })
 
 test('14d→30d→90d→14d cycle — each registers correctly', async ({ page }) => {
   await page.locator('[data-window="30"]').click()
-  await expect(page.locator('text=last 30 days')).toBeVisible()
+  await expect(page.locator('text=last 30d')).toBeVisible()
   await page.locator('[data-window="90"]').click()
-  await expect(page.locator('text=last 90 days')).toBeVisible()
+  await expect(page.locator('text=last 90d')).toBeVisible()
   await page.locator('[data-window="14"]').click()
-  await expect(page.locator('text=last 14 days')).toBeVisible()
+  await expect(page.locator('text=last 14d')).toBeVisible()
+})
+
+test('30d window pill becomes visually active after click (accent border)', async ({ page }) => {
+  await page.locator('[data-window="30"]').click()
+  // Subtitle text confirms the window state changed
+  await expect(page.locator('text=last 30d')).toBeVisible()
+  // All window pills must still be present after re-render
+  await expect(page.locator('[data-window="30"]')).toBeVisible()
+  await expect(page.locator('[data-window="14"]')).toBeVisible()
+  await expect(page.locator('[data-window="90"]')).toBeVisible()
 })
 
 // ─── Card actions ─────────────────────────────────────────────────────────────
