@@ -170,11 +170,12 @@ export async function renderFeed(container, signal, { forceRefresh = false } = {
 
   let trades = MOCK_TRADES
   let usingMock = false
+  let fetchError = null
 
   try {
-    debug(CAT, `Fetching HSW transactions (forceRefresh=${forceRefresh})`)
+    debug(CAT, `Fetching congressional transactions (forceRefresh=${forceRefresh})`)
     const allTransactions = await fetchAllTransactions({ forceRefresh })
-    debug(CAT, `HSW returned ${allTransactions.length} transactions`)
+    debug(CAT, `Congressional API returned ${allTransactions.length} transactions`)
 
     // Load active watchlist names — Sheets first, seed fallback
     let watchlistNames = WATCHLIST.filter(w => w.active === 'Y').map(w => w.name)
@@ -204,7 +205,9 @@ export async function renderFeed(container, signal, { forceRefresh = false } = {
       trades = filteredTrades
     }
   } catch (err) {
-    warn(CAT, `HSW fetch failed: ${err.message} — using mock data`)
+    fetchError = err.message
+    warn(CAT, `Congressional fetch failed: ${err.message} — using mock data`)
+    console.error('[FEED_VIEW] fetch failed:', err.message)
     showToast('Could not load live trades — showing sample data', 'error')
     usingMock = true
   }
@@ -247,7 +250,7 @@ export async function renderFeed(container, signal, { forceRefresh = false } = {
         ${refreshBtn}
       </div>
       <div style="font-size:12px;color:var(--text-secondary);margin-top:var(--s1);">${subtitle}</div>
-      ${usingMock ? `<div style="font-size:11px;color:var(--accent);margin-top:4px;">Using sample data — upload positions or connect Google to see live trades</div>` : ''}
+      ${usingMock ? `<div style="font-size:11px;color:var(--accent);margin-top:4px;">Using sample data${fetchError ? ` · ${fetchError.slice(0, 80)}` : ''}</div>` : ''}
     </div>
     <div id="feed-cards">${visibleTrades.map(_tradeCardHTML).join('')}</div>
   `

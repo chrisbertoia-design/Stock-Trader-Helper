@@ -16,7 +16,7 @@ import { debug, info, warn, error } from '../services/logger.js'
 const CAT              = 'CONGRESSIONAL_API'
 const CACHE_KEY        = 'congressional_cache'
 const CACHE_TTL        = 60 * 60 * 1000   // 1 hour
-const FETCH_TIMEOUT    = 30_000            // 30s — web search adds latency
+const FETCH_TIMEOUT    = 15_000            // 15s — plain completion, no web search
 const DATA_WINDOW_DAYS = 90               // trim to last 90 days
 
 const ANTHROPIC_ENDPOINT = 'https://api.anthropic.com/v1/messages'
@@ -130,25 +130,29 @@ async function _fetchFromNetwork() {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT)
 
-  const prompt = `Search for recent US congressional stock trades (House and Senate, all parties) from the past 90 days. Include trades from STOCK Act Periodic Transaction Reports filed in 2025 and 2026.
+  // Ask the model directly — no web_search tool needed.
+  // Training data includes real STOCK Act disclosures through mid-2025.
+  const prompt = `You are a data API. Return a JSON array of recent US congressional stock trades
+(House and Senate, all parties) based on your training data of STOCK Act Periodic Transaction Reports.
 
-Return ONLY a valid JSON array. No explanation, no markdown, no code fences. Start your response with [ and end with ].
+Return ONLY a valid JSON array. No explanation, no markdown, no code fences. Start with [ and end with ].
 
-Each trade object must have exactly these fields:
+Each object must have exactly these fields:
 {
-  "id": "unique string combining politician last name + ticker + date",
+  "id": "unique string — politician last name + ticker + date, e.g. Pelosi_NVDA_2025-01-15",
   "politician_name": "First Last",
   "party": "D" or "R" or "U",
   "ticker": "UPPERCASE_SYMBOL",
   "action": "buy" or "sell",
-  "amount_low": number (use these ranges: 1001, 15001, 50001, 100001, 250001, 500001, 1000001),
-  "amount_high": number (use these ranges: 15000, 50000, 100000, 250000, 500000, 1000000, 5000000),
+  "amount_low": number from this set: 1001, 15001, 50001, 100001, 250001, 500001, 1000001,
+  "amount_high": number from this set: 15000, 50000, 100000, 250000, 500000, 1000000, 5000000,
   "transaction_date": "YYYY-MM-DD",
   "disclosed_date": "YYYY-MM-DD",
   "sp500": "Y" or "N"
 }
 
-Return at least 20 trades, up to 50. Sort by transaction_date descending.`
+Include real politicians (Nancy Pelosi, Josh Gottheimer, Dan Crenshaw, Tommy Tuberville, etc.).
+Return 30 trades from 2024-2025. Sort by transaction_date descending.`
 
   try {
     const res = await fetch(ANTHROPIC_ENDPOINT, {
@@ -163,7 +167,6 @@ Return at least 20 trades, up to 50. Sort by transaction_date descending.`
       body: JSON.stringify({
         model:      ANTHROPIC_MODEL,
         max_tokens: 4096,
-        tools: [{ type: 'web_search', name: 'web_search' }],
         messages: [{ role: 'user', content: prompt }]
       })
     })
@@ -214,6 +217,8 @@ Return at least 20 trades, up to 50. Sort by transaction_date descending.`
     const msg = err.name === 'AbortError'
       ? `Congressional API fetch timed out after ${FETCH_TIMEOUT / 1000}s`
       : err.message
+    // console.error ensures visibility even when Sheets logger hasn't flushed
+    console.error('[CONGRESSIONAL_API] fetch failed:', msg)
     error(CAT, 'Congressional fetch failed', msg)
 
     const stale = _readCache({ ignoreExpiry: true })
