@@ -356,8 +356,8 @@ Structured logger in `src/services/logger.js`. Levels: DEBUG, INFO, WARN, ERROR.
 | BL-026 | Stale data warning (> 7 days) + empty state message in positions view | P1 | ✅ Shipped |
 | BL-027 | Format-aware upload toast (positions vs transactions) | P1 | ✅ Shipped |
 | BL-028 | 29-pick mock pool in What to Buy (expanded from 10) | P2 | ✅ Shipped |
-| BL-019 | Wire Feed view to real HSW congressional trades API | P0 | 🔲 Next |
-| BL-020 | Wire Top Signal to live `consensus` tab (replace mock) | P0 | 🔲 Next |
+| BL-019 | Wire Feed view to real HSW congressional trades API | P0 | ✅ Shipped |
+| BL-020 | Wire Top Signal + home card to live congressional consensus signals | P0 | ✅ Shipped |
 | BL-021 | Wire What to Buy picks to live `recommendations` tab (replace mock) | P0 | 🔲 Next |
 | BL-022 | AI: Gemini wiring for follow/ignore modal recommendations | P1 | 🔲 Next |
 | BL-023 | AI: What to Buy ranked picks with Gemini rationale | P1 | 🔲 Next |

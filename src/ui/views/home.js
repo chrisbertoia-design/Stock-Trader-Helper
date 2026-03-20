@@ -46,18 +46,9 @@ function _relDate(s) {
   return days === 0 ? 'today' : days === 1 ? 'yesterday' : `${days}d ago`
 }
 
-// ── Mock data ─────────────────────────────────────────────────────────────────
-
-const MOCK_SIGNAL = { ticker: 'NVDA', tier: 2, flags: 'R + D', stat: '14% of Congress buying · last 14 days' }
-
-
 // ── Render ────────────────────────────────────────────────────────────────────
 
 export async function renderHome(container, signal) {
-  const { ticker: sigTicker, tier, flags, stat } = MOCK_SIGNAL
-
-  const tierClass = tier >= 3 ? 'tier-bright' : tier === 2 ? 'tier-accent' : 'tier-subtle'
-
   // ── Live portfolio data ──────────────────────────────────────────────────────
   const posSummary    = getPositionsSummary()
   const posIsMock     = isMockPositions()
@@ -74,11 +65,14 @@ export async function renderHome(container, signal) {
   const glSign  = totalGlPct >= 0 ? '+' : ''
   const glColor = totalGlPct >= 0 ? 'var(--buy)' : 'var(--sell)'
 
-  // ── Live feed data ───────────────────────────────────────────────────────────
-  let feedData = { newCount: 0, topTrade: null }
+  // ── Live feed + signal data ──────────────────────────────────────────────────
+  let feedData   = { newCount: 0, topTrade: null }
+  let signalData = null  // null = unavailable, show placeholder
   try {
-    const trades      = await fetchAllTransactions()
+    const trades = await fetchAllTransactions()
     if (signal?.aborted) return
+
+    // What's New: watchlist-filtered last 90 days
     const watchedNames = WATCHLIST.filter(w => w.active === 'Y').map(w => w.name)
     const visible      = filterByWatchlist(trades, watchedNames, { daysBack: 90 })
     feedData.newCount  = visible.length
@@ -91,11 +85,47 @@ export async function renderHome(container, signal) {
         when:       _relDate(t.transaction_date),
       }
     }
-  } catch (e) {
-    // silent fallback — tile shows 0 new trades
+
+    // Top Signal: compute from ALL of Congress (14-day window)
+    const rawSignals = computeConsensusSignals(trades, {
+      config: { ...getConfig(), consensus_window_days: 14 },
+      partyRoster: PARTY_ROSTER,
+    })
+    if (rawSignals.length > 0) {
+      // Group by ticker, merge D + R rows, find the strongest
+      const byTicker = {}
+      for (const s of rawSignals) {
+        const t = s.tickers
+        if (!byTicker[t]) byTicker[t] = { ticker: t, parties: new Set(), memberCount: 0, tier: 0, maxPct: 0 }
+        byTicker[t].parties.add(s.party)
+        byTicker[t].memberCount += s.member_count
+        byTicker[t].tier    = Math.max(byTicker[t].tier, s.tier)
+        byTicker[t].maxPct  = Math.max(byTicker[t].maxPct, s.pct_of_party)
+      }
+      const sorted = Object.values(byTicker).sort((a, b) => b.memberCount - a.memberCount || b.tier - a.tier)
+      if (sorted.length > 0) {
+        const top      = sorted[0]
+        const parties  = Array.from(top.parties).sort()
+        const flags    = parties.length > 1 ? 'R + D' : parties[0]
+        const pctLabel = flags === 'R + D' ? 'of party' : flags === 'D' ? 'of Dems' : 'of Reps'
+        signalData = {
+          ticker: top.ticker,
+          tier:   top.tier,
+          flags,
+          stat:   `${Math.round(top.maxPct * 100)}% ${pctLabel} buying · last 14 days`,
+        }
+      }
+    }
+  } catch (_e) {
+    // silent fallback — feed shows 0 new trades, signal shows placeholder
   }
 
   const { newCount, topTrade } = feedData
+  const sigTicker = signalData?.ticker ?? '—'
+  const tier      = signalData?.tier   ?? 0
+  const flags     = signalData?.flags  ?? ''
+  const stat      = signalData?.stat   ?? 'Loading signal data…'
+  const tierClass = tier >= 3 ? 'tier-bright' : tier === 2 ? 'tier-accent' : 'tier-subtle'
 
   container.innerHTML = `
     <div class="home-wrapper">
@@ -128,12 +158,17 @@ export async function renderHome(container, signal) {
             <span class="home-card-title">Top Signal</span>
             <span class="home-card-chevron">›</span>
           </div>
+          ${signalData ? `
           <div class="home-card-value">
             <span style="font-family:var(--font-mono);font-weight:700;">${sigTicker}</span>
             <span class="tier-badge ${tierClass}">Tier ${tier}</span>
             <span style="color:var(--text-secondary);">· ${flags}</span>
           </div>
           <div class="home-card-sub">${stat} · stocks by member activity</div>
+          ` : `
+          <div class="home-card-value" style="font-size:15px;color:var(--text-secondary);">—</div>
+          <div class="home-card-sub" style="color:var(--text-tertiary);">No signals in last 14 days</div>
+          `}
         </button>
 
         <!-- My Portfolio -->

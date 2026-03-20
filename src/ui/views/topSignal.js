@@ -4,10 +4,8 @@
  * Phase 2: wired to live congressional trades via fetchAllTransactions + computeConsensusSignals.
  */
 
-import { fetchAllTransactions, filterByWatchlist, computeConsensusSignals } from '../../api/congressional.js'
+import { fetchAllTransactions, computeConsensusSignals } from '../../api/congressional.js'
 import { getConfig } from '../../stores/config.js'
-import { readTab } from '../../api/googleSheets.js'
-import { WATCHLIST } from '../../data/watchlist.js'
 
 const PARTY_ROSTER = { D: 213, R: 222 }
 
@@ -219,37 +217,29 @@ async function _loadSignals(container, signal) {
   container.innerHTML = _renderSkeleton()
 
   try {
-    // Load transactions
+    // Load all congressional transactions
     const allTx = await fetchAllTransactions({ forceRefresh: false })
 
     if (signal?.aborted) return
 
-    // Load watchlist (Sheets first, seed fallback — same pattern as feed.js)
-    let watchedNames = new Set()
-    try {
-      const rows = await readTab('watchlist')
-      const active = rows.filter(r => r[3]?.toUpperCase() === 'Y').map(r => r[0])
-      watchedNames = new Set(active.length ? active : WATCHLIST.map(w => w.name))
-    } catch {
-      watchedNames = new Set(WATCHLIST.map(w => w.name))
-    }
-
-    if (signal?.aborted) return
-
-    // Filter to watchlist members only for the active window
     const windowDays = _activeWindow
-    const filtered = filterByWatchlist(allTx, Array.from(watchedNames), { daysBack: windowDays })
 
-    // Compute consensus signals
-    const rawSignals = computeConsensusSignals(filtered, {
+    // Compute consensus from ALL of Congress — not watchlist-filtered.
+    // Watchlist filter shrinks the denominator incorrectly (11 watched Dems / 213 total Dems
+    // = 5.2%, below the 8% tier1 threshold, so nothing passes). Top Signal shows Congress-wide
+    // activity, not just followed politicians.
+    const rawSignals = computeConsensusSignals(allTx, {
       config: { ...getConfig(), consensus_window_days: windowDays },
       partyRoster: PARTY_ROSTER
     })
 
-    // Derive card-shape objects from raw signals.
-    // If the computation produces no results (low activity, high thresholds), fall back to
-    // MOCK_SIGNALS silently — no banner. Banner is reserved for fetch failures only.
-    _liveSignals = _deriveCardSignals(rawSignals, filtered)
+    // Derive card details (buyCount, sellCount, topTrader) from the active time window
+    const cutoff = Date.now() - windowDays * 86_400_000
+    const windowTx = allTx.filter(tx => tx.transaction_ts >= cutoff)
+
+    // If computation yields no results, fall back to MOCK_SIGNALS silently.
+    // Banner is reserved for fetch failures only.
+    _liveSignals = _deriveCardSignals(rawSignals, windowTx)
     if (_liveSignals.length === 0) _liveSignals = MOCK_SIGNALS
     _usingMock = false
 
