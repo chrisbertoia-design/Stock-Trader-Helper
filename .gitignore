@@ -30,3 +30,4 @@ congressional_trading_coordination_analysis.json
 # Playwright
 test-results/
 playwright-report/
+tests/report/
