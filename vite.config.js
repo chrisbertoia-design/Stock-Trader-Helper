@@ -15,15 +15,7 @@ export default defineConfig({
   base: '/Stock-Trader-Helper/',
   server: {
     port: 5175,
-    strictPort: true,
-    proxy: {
-      '/api/hsw': {
-        target: 'https://house-stock-watcher-data.s3.us-west-2.amazonaws.com',
-        changeOrigin: true,
-        followRedirects: true,
-        rewrite: (path) => path.replace(/^\/api\/hsw/, '/data')
-      }
-    }
+    strictPort: true
   },
   plugins: [
     VitePWA({

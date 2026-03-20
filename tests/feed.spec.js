@@ -151,3 +151,136 @@ test('[REGRESSION] listener accumulation — follow/ignore work after re-navigat
   await page.locator('.trade-ignore-btn').first().click()
   await expect(page.locator('.trade-card')).toHaveCount(4, { timeout: 1500 })
 })
+
+// ─── Congressional API (Anthropic) integration ────────────────────────────────
+
+/**
+ * Build a minimal Anthropic /v1/messages response body containing `count`
+ * mock trades. All trades use a transaction_date 30 days ago so they pass
+ * the feed's 90-day recency filter.
+ *
+ * The mock JSON does NOT include `transaction_ts` — congressional.js derives
+ * that field from `transaction_date` at parse time.
+ */
+function buildAnthropicResponse(count = 3) {
+  const recentDate = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10)
+  // Names must match seed watchlist so filterByWatchlist passes them through
+  const WATCHLIST_NAMES = ['Nancy Pelosi', 'Josh Gottheimer', 'Marjorie Taylor Greene',
+    'Ro Khanna', 'Michael McCaul', 'Mike Turner', 'Jim Himes', 'Mike Johnson']
+  const trades = Array.from({ length: count }, (_, i) => ({
+    id:               `mock-trade-${i + 1}`,
+    politician_name:  WATCHLIST_NAMES[i % WATCHLIST_NAMES.length],
+    party:            i % 2 === 0 ? 'D' : 'R',
+    ticker:           ['NVDA', 'AAPL', 'MSFT', 'GOOGL', 'AMZN'][i % 5],
+    action:           i % 2 === 0 ? 'buy' : 'sell',
+    amount_low:       1001,
+    amount_high:      15000,
+    transaction_date: recentDate,
+    disclosed_date:   recentDate,
+    sp500:            'Y',
+  }))
+
+  return {
+    content: [{ type: 'text', text: JSON.stringify(trades) }],
+    model:   'claude-haiku-4-5-20251001',
+  }
+}
+
+// ── Helper: navigate to feed with a fresh cache and a given Anthropic route mock ──
+// Uses the addInitScript already registered by beforeEach (no double-setup).
+// Route added here takes priority over auth.js's Anthropic abort (last-wins in Playwright).
+async function _goToFeedWithMock(page, routeHandler) {
+  await page.evaluate(() => {
+    localStorage.removeItem('congressional_cache')
+    localStorage.removeItem('sth_trade_decisions')
+    // Clear last-view so app boots to home, not feed
+    sessionStorage.removeItem('sth_last_view')
+  })
+  await page.route('**/v1/messages', routeHandler)
+  await page.goto('/')
+  await page.waitForSelector('.home-card', { timeout: 8000 })
+  await page.locator('.home-card').first().click()
+}
+
+test('[CONGRESSIONAL API] loads real trade data from Anthropic response', async ({ page }) => {
+  await _goToFeedWithMock(page, route =>
+    route.fulfill({
+      status:      200,
+      contentType: 'application/json',
+      body:        JSON.stringify(buildAnthropicResponse(3)),
+    })
+  )
+  await page.locator('#feed-cards').waitFor({ timeout: 10000 })
+
+  // 3 trade cards rendered from mock API data
+  await expect(page.locator('.trade-card')).toHaveCount(3)
+  // Mock-data banner must NOT be present — real API path was exercised
+  await expect(page.locator('text=Using sample data')).not.toBeVisible()
+  // First card contains the politician name from the mock payload
+  await expect(page.locator('.trade-card').first()).toContainText('Nancy Pelosi')
+})
+
+test('[CONGRESSIONAL API] mock-data banner absent when API succeeds', async ({ page }) => {
+  // Regression guard — critical observability test.
+  // If banner IS visible when API succeeds, mock-data fallback ran despite healthy response.
+  await _goToFeedWithMock(page, route =>
+    route.fulfill({
+      status:      200,
+      contentType: 'application/json',
+      body:        JSON.stringify(buildAnthropicResponse(1)),
+    })
+  )
+  await page.locator('#feed-cards').waitFor({ timeout: 10000 })
+  await expect(page.locator('text=Using sample data')).not.toBeVisible()
+})
+
+test('[CONGRESSIONAL API] API failure falls back to mock trades', async ({ page }) => {
+  // auth.js already aborts api.anthropic.com — no override needed here.
+  // Just clear cache so the abort triggers a fresh (failed) fetch.
+  await page.evaluate(() => localStorage.removeItem('congressional_cache'))
+  await page.locator('#feed-cards').waitFor({ timeout: 5000 })
+  // Mock-data banner must appear when the API is unreachable
+  await expect(page.locator('text=Using sample data')).toBeVisible()
+})
+
+test('[CONGRESSIONAL API] invalid JSON response falls back to mock', async ({ page }) => {
+  await _goToFeedWithMock(page, route =>
+    route.fulfill({
+      status:      200,
+      contentType: 'application/json',
+      body:        JSON.stringify({
+        content: [{ type: 'text', text: 'not valid json []{}' }],
+        model:   'claude-haiku-4-5-20251001',
+      }),
+    })
+  )
+  await page.locator('#feed-cards').waitFor({ timeout: 10000 })
+  // Malformed payload must trigger mock-data fallback
+  await expect(page.locator('text=Using sample data')).toBeVisible()
+})
+
+test('[CONGRESSIONAL API] refresh button triggers new API call', async ({ page }) => {
+  let callCount = 0
+  await _goToFeedWithMock(page, route => {
+    callCount++
+    return route.fulfill({
+      status:      200,
+      contentType: 'application/json',
+      body:        JSON.stringify(buildAnthropicResponse(3)),
+    })
+  })
+  await page.locator('#feed-cards').waitFor({ timeout: 10000 })
+
+  // Confirm at least one call happened during initial load
+  expect(callCount).toBeGreaterThanOrEqual(1)
+  const countAfterLoad = callCount
+
+  // Click the refresh button
+  await page.locator('#feed-refresh-btn').click()
+
+  // Wait for cards to reload
+  await page.locator('#feed-cards').waitFor({ timeout: 8000 })
+
+  // Refresh must have triggered at least one additional API call
+  expect(callCount).toBeGreaterThan(countAfterLoad)
+})

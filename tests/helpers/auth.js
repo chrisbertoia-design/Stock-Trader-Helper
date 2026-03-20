@@ -25,7 +25,7 @@ export async function setupAuth(page) {
   // 2. Block ALL external API calls immediately.
   //    Aborting Sheets (not 401) makes initSheets() throw → sheetsWriter never set
   //    → logger stays console-only → no appendRows→debug→flush→appendRows recursion.
-  await page.route(/googleapis\.com|accounts\.google\.com|house-stock-watcher|\/api\/hsw/, route => {
+  await page.route(/googleapis\.com|accounts\.google\.com|house-stock-watcher|\/api\/hsw|api\.anthropic\.com/, route => {
     route.abort()
   })
 }

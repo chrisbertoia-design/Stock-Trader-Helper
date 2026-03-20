@@ -4,7 +4,7 @@
  * Loads live HSW congressional trades; falls back to MOCK_TRADES on error.
  */
 
-import { fetchAllTransactions, filterByWatchlist } from '../../api/houseStockWatcher.js'
+import { fetchAllTransactions, filterByWatchlist } from '../../api/congressional.js'
 import { readTab } from '../../api/googleSheets.js'
 import { debug, warn } from '../../services/logger.js'
 import { showToast } from '../components/toast.js'
