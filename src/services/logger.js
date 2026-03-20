@@ -86,6 +86,7 @@ async function _writeToSheets(entry) {
     _buffer.push(entry) // buffer on failure
   } finally {
     _writing = false
+    if (_buffer.length > 0 && !_flushing) _flushBuffer()
   }
 }
 

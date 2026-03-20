@@ -202,7 +202,7 @@ export async function renderFeed(container, signal, { forceRefresh = false } = {
     // Congressional disclosures lag 30–45 days after the trade, so a
     // 30-day transaction_date filter silently drops most recent disclosures.
     const filteredTrades = filterByWatchlist(allTransactions, watchlistNames, { daysBack: 90 })
-    debug(CAT, `Filtered to ${filteredTrades.length} trades in last 30 days`)
+    debug(CAT, `Filtered to ${filteredTrades.length} trades in last 90 days`)
 
     if (filteredTrades.length === 0) {
       warn(CAT, 'No trades found for watchlist in past 30 days — using mock')
@@ -232,7 +232,7 @@ export async function renderFeed(container, signal, { forceRefresh = false } = {
   const tradeCount = visibleTrades.length
   const subtitle = usingMock
     ? 'Sample data — connect Google to load live trades'
-    : `${tradeCount} disclosure${tradeCount !== 1 ? 's' : ''} · last 30 days`
+    : `${tradeCount} disclosure${tradeCount !== 1 ? 's' : ''} · last 90 days`
 
   const refreshBtn = `<button id="feed-refresh-btn" class="btn btn-ghost" style="font-size:11px;padding:2px 10px;margin-top:var(--s2);">↺ Refresh</button>`
 
