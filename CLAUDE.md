@@ -209,8 +209,16 @@ After the assessment, launch one coding agent per distinct bug. All agents run i
 **Step 3 — Commit + Push (main agent)**
 After all fix agents complete, main agent: reviews diffs, commits with detailed message, pushes.
 
-**Step 4 — Eval Agent (background)**
-After push, launch a background eval agent to update `docs/evals/ui-click-paths.md` with regression tests for the bugs just fixed.
+**Step 4 — Full Regression Run (MANDATORY)**
+Run `npx playwright test` in full. Every test must pass. If any test fails, launch fix agents, commit, and re-run. Do not proceed until suite is green.
+
+**Step 5 — Eval Agent (MANDATORY, background)**
+After green regression, launch background eval agent to update `docs/evals/ui-click-paths.md` with regression tests for the bugs just fixed and any new interactive elements added.
+
+**Step 6 — Fix + Repeat Loop**
+If eval agent surfaces gaps or regressions: fix → commit → re-run full test suite → re-run evals. Loop until clean.
+
+**Never declare done until: full test suite green AND evals updated.**
 
 ## Eval Protocol
 

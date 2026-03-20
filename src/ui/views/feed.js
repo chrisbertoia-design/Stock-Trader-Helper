@@ -12,6 +12,12 @@ import { WATCHLIST } from '../../data/watchlist.js'
 
 const CAT = 'FEED_VIEW'
 
+// ─── Pagination state ────────────────────────────────────────────────────────
+// Reset on each fresh renderFeed() call. Shared with the "Show more" handler.
+let _displayCount = 5
+let _allVisibleTrades = []
+let _showMorePending = false // guard against double-click duplication
+
 const MOCK_TRADES = [
   { id: '1', politician_name: 'Nancy Pelosi',    party: 'D', ticker: 'NVDA', action: 'buy',  amount_low: 250001,  amount_high: 500000,   transaction_date: '2026-03-11', disclosed_date: '2026-03-13' },
   { id: '2', politician_name: 'Dan Crenshaw',    party: 'R', ticker: 'MSFT', action: 'buy',  amount_low: 15001,   amount_high: 50000,    transaction_date: '2026-03-10', disclosed_date: '2026-03-12' },
@@ -218,6 +224,11 @@ export async function renderFeed(container, signal, { forceRefresh = false } = {
   const decisions = _loadDecisions()
   const visibleTrades = trades.filter(t => decisions[t.id] !== 'ignored')
 
+  // Reset pagination state for this fresh render
+  _displayCount = 5
+  _allVisibleTrades = visibleTrades
+  _showMorePending = false
+
   const tradeCount = visibleTrades.length
   const subtitle = usingMock
     ? 'Sample data — connect Google to load live trades'
@@ -243,6 +254,8 @@ export async function renderFeed(container, signal, { forceRefresh = false } = {
     return
   }
 
+  const initialBatch = visibleTrades.slice(0, _displayCount)
+
   container.innerHTML = `
     <div style="margin-bottom:var(--s5);">
       <div style="display:flex;align-items:center;justify-content:space-between;">
@@ -252,11 +265,12 @@ export async function renderFeed(container, signal, { forceRefresh = false } = {
       <div style="font-size:12px;color:var(--text-secondary);margin-top:var(--s1);">${subtitle}</div>
       ${usingMock ? `<div style="font-size:11px;color:var(--accent);margin-top:4px;">Using sample data${fetchError ? ` · ${fetchError.slice(0, 80)}` : ''}</div>` : ''}
     </div>
-    <div id="feed-cards">${visibleTrades.map(_tradeCardHTML).join('')}</div>
+    <div id="feed-cards">${initialBatch.map(_tradeCardHTML).join('')}</div>
+    ${_buildShowMoreBtn(visibleTrades.length)}
   `
 
-  // Restore followed state
-  visibleTrades.forEach(trade => {
+  // Restore followed state for the initially visible cards
+  initialBatch.forEach(trade => {
     if (decisions[trade.id] === 'followed') {
       _applyFollowedUI(container, trade.id)
     }
@@ -264,6 +278,119 @@ export async function renderFeed(container, signal, { forceRefresh = false } = {
 
   _attachHandlers(container, visibleTrades, decisions, signal)
   _attachRefreshHandler(container, signal)
+  _attachShowMoreHandler(container, decisions, signal)
+}
+
+// ─── Pagination helpers ───────────────────────────────────────────────────────
+
+function _buildShowMoreBtn(totalCount) {
+  const remaining = totalCount - _displayCount
+  if (remaining <= 0) return ''
+  return `<button id="feed-show-more" class="btn btn-ghost"
+    style="width:100%;margin-top:var(--s3);font-size:13px;">
+    Show more (${remaining} remaining)
+  </button>`
+}
+
+function _attachShowMoreHandler(container, decisions, signal) {
+  const btn = container.querySelector('#feed-show-more')
+  if (!btn) return
+
+  btn.addEventListener('click', () => {
+    // Double-click guard: ignore while a batch is being appended
+    if (_showMorePending) return
+    _showMorePending = true
+
+    const cardsEl = container.querySelector('#feed-cards')
+    if (!cardsEl) { _showMorePending = false; return }
+
+    const nextBatch = _allVisibleTrades.slice(_displayCount, _displayCount + 5)
+    _displayCount += nextBatch.length
+
+    // Append new cards without touching existing ones (preserves expand/collapse state)
+    const fragment = document.createDocumentFragment()
+    nextBatch.forEach(trade => {
+      const wrapper = document.createElement('div')
+      wrapper.innerHTML = _tradeCardHTML(trade)
+      const card = wrapper.firstElementChild
+      fragment.appendChild(card)
+    })
+    cardsEl.appendChild(fragment)
+
+    // Restore followed state for newly appended cards
+    nextBatch.forEach(trade => {
+      if (decisions[trade.id] === 'followed') {
+        _applyFollowedUI(container, trade.id)
+      }
+    })
+
+    // Wire follow/ignore buttons on the newly added cards
+    _attachHandlersForBatch(container, nextBatch, decisions, signal)
+
+    // Update or remove the "Show more" button
+    const remaining = _allVisibleTrades.length - _displayCount
+    if (remaining <= 0) {
+      btn.remove()
+    } else {
+      btn.textContent = `Show more (${remaining} remaining)`
+    }
+
+    _showMorePending = false
+  }, signal ? { signal } : {})
+}
+
+function _attachHandlersForBatch(container, trades, decisions, signal) {
+  const cardState = new Map(Object.entries(decisions))
+  const opts = signal ? { signal } : {}
+
+  trades.forEach(trade => {
+    const followBtn = container.querySelector(`.trade-follow-btn[data-trade-id="${trade.id}"]`)
+    if (followBtn) {
+      followBtn.addEventListener('click', (e) => {
+        e.stopPropagation()
+        const tradeId = followBtn.dataset.tradeId
+        if (cardState.get(tradeId) === 'followed') return
+        cardState.set(tradeId, 'followed')
+        _saveDecision(tradeId, 'followed')
+        _applyFollowedUI(container, tradeId)
+      }, opts)
+    }
+
+    const ignoreBtn = container.querySelector(`.trade-ignore-btn[data-trade-id="${trade.id}"]`)
+    if (ignoreBtn) {
+      ignoreBtn.addEventListener('click', (e) => {
+        e.stopPropagation()
+        const tradeId = ignoreBtn.dataset.tradeId
+        if (cardState.get(tradeId) === 'ignored') return
+        cardState.set(tradeId, 'ignored')
+        _saveDecision(tradeId, 'ignored')
+
+        const card = container.querySelector(`.trade-card[data-trade-id="${tradeId}"]`)
+        if (!card) return
+
+        card.style.transition = 'opacity 300ms ease, max-height 300ms ease, margin-top 300ms ease, padding 300ms ease'
+        card.style.opacity    = '0'
+        card.style.maxHeight  = card.getBoundingClientRect().height + 'px'
+        void card.offsetHeight
+
+        const rafId   = requestAnimationFrame(() => {
+          card.style.maxHeight     = '0'
+          card.style.marginTop     = '0'
+          card.style.paddingTop    = '0'
+          card.style.paddingBottom = '0'
+          card.style.overflow      = 'hidden'
+        })
+        const timerId = setTimeout(() => {
+          if (card.parentElement) card.remove()
+        }, 320)
+
+        signal?.addEventListener('abort', () => {
+          cancelAnimationFrame(rafId)
+          clearTimeout(timerId)
+        }, { once: true })
+      }, opts)
+    }
+  })
 }
 
 function _attachRefreshHandler(container, signal) {

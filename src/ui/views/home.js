@@ -1,10 +1,13 @@
 /**
  * Home dashboard — 4 summary cards.
  * Portfolio card uses live data from the positions store.
+ * What's New card fetches live congressional trade data via fetchAllTransactions().
  * Cards use onclick="window._navigate(...)" — no closure, no async.
  */
 
 import { getPositionsSummary, getPositions } from '../../stores/positions.js'
+import { fetchAllTransactions, filterByWatchlist } from '../../api/congressional.js'
+import { WATCHLIST } from '../../data/watchlist.js'
 
 function isMockPositions() {
   const positions = getPositions()
@@ -30,17 +33,24 @@ function _fmt$(n) {
   return `$${n.toFixed(0)}`
 }
 
-// ── Mock data ─────────────────────────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
-const MOCK_FEED = { newCount: 4, topTrade: { politician: 'Pelosi', ticker: 'NVDA', action: 'buy', when: '2 days ago' } }
+function _relDate(s) {
+  if (!s) return 'unknown'
+  const d = new Date(s + 'T12:00:00')
+  if (isNaN(d)) return 'unknown'
+  const days = Math.floor((Date.now() - d) / 86_400_000)
+  return days === 0 ? 'today' : days === 1 ? 'yesterday' : `${days}d ago`
+}
+
+// ── Mock data ─────────────────────────────────────────────────────────────────
 
 const MOCK_SIGNAL = { ticker: 'NVDA', tier: 2, flags: 'R + D', stat: '14% of Congress buying · last 14 days' }
 
 
 // ── Render ────────────────────────────────────────────────────────────────────
 
-export function renderHome(container, signal) {
-  const { newCount, topTrade }                   = MOCK_FEED
+export async function renderHome(container, signal) {
   const { ticker: sigTicker, tier, flags, stat } = MOCK_SIGNAL
 
   const tierClass = tier >= 3 ? 'tier-bright' : tier === 2 ? 'tier-accent' : 'tier-subtle'
@@ -61,6 +71,29 @@ export function renderHome(container, signal) {
   const glSign  = totalGlPct >= 0 ? '+' : ''
   const glColor = totalGlPct >= 0 ? 'var(--buy)' : 'var(--sell)'
 
+  // ── Live feed data ───────────────────────────────────────────────────────────
+  let feedData = { newCount: 0, topTrade: null }
+  try {
+    const trades      = await fetchAllTransactions()
+    if (signal?.aborted) return
+    const watchedNames = WATCHLIST.filter(w => w.active === 'Y').map(w => w.name)
+    const visible      = filterByWatchlist(trades, watchedNames, { daysBack: 90 })
+    feedData.newCount  = visible.length
+    if (visible.length > 0) {
+      const t = visible[0]
+      feedData.topTrade = {
+        politician: t.politician_name,
+        ticker:     t.ticker,
+        action:     t.action,
+        when:       _relDate(t.transaction_date),
+      }
+    }
+  } catch (e) {
+    // silent fallback — tile shows 0 new trades
+  }
+
+  const { newCount, topTrade } = feedData
+
   container.innerHTML = `
     <div class="home-wrapper">
       <div class="home-greet-block">
@@ -80,7 +113,10 @@ export function renderHome(container, signal) {
             <span class="home-card-chevron">›</span>
           </div>
           <div class="home-card-value">${newCount} trade${newCount !== 1 ? 's' : ''} since your last visit</div>
-          <div class="home-card-sub">${topTrade.politician} · ${topTrade.ticker} · ${topTrade.action} · ${topTrade.when}</div>
+          ${topTrade
+            ? `<div class="home-card-sub">${topTrade.politician} · ${topTrade.ticker} · ${topTrade.action} · ${topTrade.when}</div>`
+            : `<div class="home-card-sub" style="color:var(--text-tertiary);">No recent trades on watchlist</div>`
+          }
         </button>
 
         <!-- Top Signal -->

@@ -142,6 +142,12 @@ async function _fetchFromNetwork() {
       throw new Error('congressional-trades.json: "trades" field is not an array')
     }
 
+    info(CAT, 'Raw API response received', {
+      generated_at:   json.generated_at,
+      trade_count:    json.trades?.length ?? 0,
+      sample_tickers: json.trades?.slice(0, 3).map(t => t.ticker)
+    })
+
     info(CAT, `Static file returned ${rawTrades.length} raw trade records — normalizing...`)
 
     const cutoffMs = Date.now() - DATA_WINDOW_DAYS * 86_400_000
