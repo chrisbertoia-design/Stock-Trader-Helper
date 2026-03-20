@@ -152,17 +152,24 @@ test('[REGRESSION] listener accumulation — follow/ignore work after re-navigat
   await expect(page.locator('.trade-card')).toHaveCount(4, { timeout: 1500 })
 })
 
-// ─── Congressional API (Anthropic) integration ────────────────────────────────
+// ─── Congressional API (static JSON) integration ─────────────────────────────
 
 /**
- * Build a minimal Anthropic /v1/messages response body containing `count`
- * mock trades. All trades use a transaction_date 30 days ago so they pass
+ * Build a mock congressional-trades.json response body containing `count`
+ * trade objects. All trades use a transaction_date 30 days ago so they pass
  * the feed's 90-day recency filter.
  *
- * The mock JSON does NOT include `transaction_ts` — congressional.js derives
- * that field from `transaction_date` at parse time.
+ * Shape matches the static file produced by scripts/generate-trades.js:
+ *   { generated_at: <ISO string>, trades: [ ...normalized trade objects ] }
+ *
+ * congressional.js reads `json.trades`, normalises each record, and derives
+ * `transaction_ts` from `transaction_date` — so `transaction_ts` is NOT
+ * included here.
+ *
+ * Provide at least 5 trades so the initial render (displayCount = 5) can
+ * show a full first page. Assertions should use Math.min(count, 5).
  */
-function buildAnthropicResponse(count = 3) {
+function buildTradesResponse(count = 5) {
   const recentDate = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10)
   // Names must match seed watchlist so filterByWatchlist passes them through
   const WATCHLIST_NAMES = ['Nancy Pelosi', 'Josh Gottheimer', 'Marjorie Taylor Greene',
@@ -181,14 +188,15 @@ function buildAnthropicResponse(count = 3) {
   }))
 
   return {
-    content: [{ type: 'text', text: JSON.stringify(trades) }],
-    model:   'claude-haiku-4-5-20251001',
+    generated_at: new Date().toISOString(),
+    trades,
   }
 }
 
-// ── Helper: navigate to feed with a fresh cache and a given Anthropic route mock ──
+// ── Helper: navigate to feed with a fresh cache and a given trades-JSON route mock ──
 // Uses the addInitScript already registered by beforeEach (no double-setup).
-// Route added here takes priority over auth.js's Anthropic abort (last-wins in Playwright).
+// Route added here intercepts the same-origin congressional-trades.json fetch
+// and takes priority over any previously registered routes (last-wins in Playwright).
 async function _goToFeedWithMock(page, routeHandler) {
   await page.evaluate(() => {
     localStorage.removeItem('congressional_cache')
@@ -196,24 +204,25 @@ async function _goToFeedWithMock(page, routeHandler) {
     // Clear last-view so app boots to home, not feed
     sessionStorage.removeItem('sth_last_view')
   })
-  await page.route('**/v1/messages', routeHandler)
+  await page.route('**/congressional-trades.json', routeHandler)
   await page.goto('/')
   await page.waitForSelector('.home-card', { timeout: 8000 })
   await page.locator('.home-card').first().click()
 }
 
 test('[CONGRESSIONAL API] loads real trade data from Anthropic response', async ({ page }) => {
+  // Provide 5 trades — feed initially shows Math.min(tradeCount, displayCount=5) cards.
   await _goToFeedWithMock(page, route =>
     route.fulfill({
       status:      200,
       contentType: 'application/json',
-      body:        JSON.stringify(buildAnthropicResponse(3)),
+      body:        JSON.stringify(buildTradesResponse(5)),
     })
   )
   await page.locator('#feed-cards').waitFor({ timeout: 10000 })
 
-  // 3 trade cards rendered from mock API data
-  await expect(page.locator('.trade-card')).toHaveCount(3)
+  // 5 trade cards rendered from mock API data (displayCount cap = 5)
+  await expect(page.locator('.trade-card')).toHaveCount(5)
   // Mock-data banner must NOT be present — real API path was exercised
   await expect(page.locator('text=Using sample data')).not.toBeVisible()
   // First card contains the politician name from the mock payload
@@ -223,11 +232,12 @@ test('[CONGRESSIONAL API] loads real trade data from Anthropic response', async 
 test('[CONGRESSIONAL API] mock-data banner absent when API succeeds', async ({ page }) => {
   // Regression guard — critical observability test.
   // If banner IS visible when API succeeds, mock-data fallback ran despite healthy response.
+  // Provide 5 trades so filterByWatchlist returns results (non-empty → no mock fallback).
   await _goToFeedWithMock(page, route =>
     route.fulfill({
       status:      200,
       contentType: 'application/json',
-      body:        JSON.stringify(buildAnthropicResponse(1)),
+      body:        JSON.stringify(buildTradesResponse(5)),
     })
   )
   await page.locator('#feed-cards').waitFor({ timeout: 10000 })
@@ -235,23 +245,30 @@ test('[CONGRESSIONAL API] mock-data banner absent when API succeeds', async ({ p
 })
 
 test('[CONGRESSIONAL API] API failure falls back to mock trades', async ({ page }) => {
-  // auth.js already aborts api.anthropic.com — no override needed here.
-  // Just clear cache so the abort triggers a fresh (failed) fetch.
-  await page.evaluate(() => localStorage.removeItem('congressional_cache'))
+  // Abort the congressional-trades.json fetch so the fallback mock path runs.
+  // auth.js does NOT abort same-origin requests, so we register the abort here.
+  await page.evaluate(() => {
+    localStorage.removeItem('congressional_cache')
+    localStorage.removeItem('sth_trade_decisions')
+    sessionStorage.removeItem('sth_last_view')
+  })
+  await page.route('**/congressional-trades.json', route => route.abort())
+  await page.goto('/')
+  await page.waitForSelector('.home-card', { timeout: 8000 })
+  await page.locator('.home-card').first().click()
   await page.locator('#feed-cards').waitFor({ timeout: 5000 })
   // Mock-data banner must appear when the API is unreachable
   await expect(page.locator('text=Using sample data')).toBeVisible()
 })
 
 test('[CONGRESSIONAL API] invalid JSON response falls back to mock', async ({ page }) => {
+  // Return a response that parses as valid JSON but lacks the `trades` array,
+  // triggering the "trades field is not an array" error path in congressional.js.
   await _goToFeedWithMock(page, route =>
     route.fulfill({
       status:      200,
       contentType: 'application/json',
-      body:        JSON.stringify({
-        content: [{ type: 'text', text: 'not valid json []{}' }],
-        model:   'claude-haiku-4-5-20251001',
-      }),
+      body:        JSON.stringify({ generated_at: new Date().toISOString(), error: 'not valid' }),
     })
   )
   await page.locator('#feed-cards').waitFor({ timeout: 10000 })
@@ -266,7 +283,7 @@ test('[CONGRESSIONAL API] refresh button triggers new API call', async ({ page }
     return route.fulfill({
       status:      200,
       contentType: 'application/json',
-      body:        JSON.stringify(buildAnthropicResponse(3)),
+      body:        JSON.stringify(buildTradesResponse(5)),
     })
   })
   await page.locator('#feed-cards').waitFor({ timeout: 10000 })
@@ -275,7 +292,7 @@ test('[CONGRESSIONAL API] refresh button triggers new API call', async ({ page }
   expect(callCount).toBeGreaterThanOrEqual(1)
   const countAfterLoad = callCount
 
-  // Click the refresh button
+  // Click the refresh button (forceRefresh=true bypasses the 1-hour cache)
   await page.locator('#feed-refresh-btn').click()
 
   // Wait for cards to reload
