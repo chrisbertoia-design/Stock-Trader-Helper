@@ -70,6 +70,19 @@ data looks correct in Sheets UI (shows formatted date), but API reads return the
 backward compat with rows written before the fix.
 **Detection tip**: if a date field reads back as a 5-digit number in range 40000-60000, it's a Sheets date serial.
 
+## 2026-03-20 | HSW S3 bucket had public access permanently revoked — multiple sessions wasted
+The House Stock Watcher S3 bucket (`house-stock-watcher-data.s3.us-west-2.amazonaws.com`) was a
+community-run public bucket. AWS tightened public bucket policies and the maintainer revoked public
+access. Both URL formats (hyphen and dot notation) return HTTP 403 `AccessDenied`. The app had been
+built entirely around this endpoint. Multiple debug sessions were spent fixing the URL format, region,
+and filter logic — none of which mattered because the bucket itself was dead.
+**Root cause**: the API was never properly vetted for long-term hosting stability. "It works today" is
+not the same as "it will work in 3 months."
+**Fix**: migrate to Anthropic API (Claude + web search) to fetch congressional trade data, with
+1-hour localStorage cache to minimize API cost (~$0.001/refresh at Haiku pricing).
+**Prevention**: added API Vetting Protocol to both project CLAUDE.md and global ~/.claude/CLAUDE.md.
+Every new API integration must be vetted for liveness, CORS, and hosting stability before implementation begins.
+
 ## 2026-03-16 | Settings view used hardcoded MOCK_CONFIG instead of reading from config store
 The settings view rendered config fields from a static `MOCK_CONFIG` object and the "Save to Sheets" button
 showed a "Phase 2 toast" placeholder. Edits were never persisted — the user could change values all day
