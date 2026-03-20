@@ -36,9 +36,28 @@
 
 ### Cards — General
 
-- [ ] **[Home > What's New card]**: Verify card content
-  - **Before**: Home loaded
-  - **Expected**: Title "What's New" with a filled dot badge (new-badge, small colored dot) to the right of the title text. Value row reads "4 trades since your last visit". Sub-row reads "Pelosi · NVDA · buy · 2 days ago". Chevron "›" on the right side of the header row.
+- [ ] **[Home > What's New card — live data loaded]**: Verify card content after HSW fetch resolves successfully with watchlist results
+  - **Before**: Home loaded; `fetchAllTransactions()` resolved with N > 0 watchlist trades
+  - **Expected**: Title "What's New" with a filled dot badge (new-badge, small colored dot) to the right of the title text when `newCount > 0`. Value row reads "N trade(s) since your last visit" where N is the actual filtered count (not hardcoded "4"). If N = 1, reads "1 trade since your last visit" (singular). Sub-row reads "[politician] · [TICKER] · [buy|sell] · [relative date]" sourced from the most recent watchlist trade (index 0 of the filtered array). Chevron "›" on the right side of the header row.
+  - **Regression**: Prevents hardcoded "4 trades" from appearing regardless of real data; confirms live count from `filterByWatchlist()` is used.
+
+- [ ] **[Home > What's New card — zero trades]**: Verify card content when fetch returns 0 watchlist results
+  - **Before**: Home loaded; HSW fetch succeeded but filtered array has 0 entries (`newCount = 0`)
+  - **Expected**: Value row reads "0 trades since your last visit". No new-badge dot is shown (badge is only rendered when `newCount > 0`). Sub-row reads "No recent trades on watchlist" in `var(--text-tertiary)` (muted/dim color), not the politician line. Card is still tappable and navigates to Feed.
+  - **Regression**: Confirms fallback sub-row text appears and badge is absent when count is zero.
+
+- [ ] **[Home > What's New card — API error / offline]**: Verify card content when `fetchAllTransactions()` throws
+  - **Before**: Home loaded; device offline or HSW API unreachable; `fetchAllTransactions()` rejects
+  - **Expected**: The `catch` block fires silently (no toast on Home). Value row reads "0 trades since your last visit". Sub-row reads "No recent trades on watchlist" in tertiary color. No badge dot. Card is still tappable and navigates to Feed.
+  - **Regression**: Confirms silent fallback — home never shows a blank/error state because of a failed Feed API call.
+
+- [ ] **[Home > What's New card — singular vs plural]**: Verify correct grammatical form for trade count
+  - **Before**: Home loaded; exactly 1 trade in watchlist result
+  - **Expected**: Value row reads "1 trade since your last visit" (no "s"). With 2+ trades it reads "N trades since your last visit". Grammar is driven by `newCount !== 1 ? 's' : ''` template literal.
+
+- [ ] **[Home > What's New card — sub-row politician line format]**: Verify sub-row format when live data is present
+  - **Before**: Home loaded with `topTrade` set (live data with ≥ 1 watchlist result)
+  - **Expected**: Sub-row reads exactly "[politician_name] · [ticker] · [action] · [relative date]" — all lowercase action (buy/sell), relative date from `_relDate()` (today/yesterday/Nd ago), no trailing period. Example: "Nancy Pelosi · NVDA · buy · 2d ago". Source is `visible[0]` (most recent filtered trade).
 
 - [ ] **[Home > Top Signal card]**: Verify card content
   - **Before**: Home loaded
@@ -55,8 +74,8 @@
 ### Navigation Out — Each Tile
 
 - [ ] **[Home > What's New tile tap]**: Tap the "What's New" card
-  - **Before**: Home view, four tiles visible
-  - **Expected**: Feed view slides/renders in. Header back button (←) becomes visible. Settings (⚙) button is still visible. "Recent Trades" heading appears with trade cards below it.
+  - **Before**: Home view, four tiles visible; card shows live trade count and top politician line (or "No recent trades on watchlist" if 0 results)
+  - **Expected**: Feed view renders with skeleton, then live trade cards. Header back button (←) becomes visible. Settings (⚙) button is still visible. "Recent Trades" heading appears with trade cards below it. The tap works regardless of whether the card currently shows live data or the fallback "No recent trades" sub-row.
   - **Regression**: Catches iOS div-click non-firing — card is a `<button>` element, must register tap on iOS Chrome.
 
 - [ ] **[Home > Top Signal tile tap]**: Tap the "Top Signal" card
@@ -95,7 +114,7 @@
 
 - [ ] **[Feed > Entry path]**: From Home, tap "What's New" tile
   - **Before**: Home view
-  - **Expected**: Feed view renders. Header shows ← back button and ⚙ button. "Recent Trades" heading visible. Count reads "5 trades · last 90 days". Five trade cards visible in default collapsed state.
+  - **Expected**: Feed view renders with skeleton immediately. After data loads, header shows ← back button and ⚙ button. "Recent Trades" heading visible. Subtitle reads "N disclosures · last 30 days" (live) or the mock subtitle. The first 5 trade cards are visible in default collapsed state. If more than 5 trades exist, a "Show more (N remaining)" button appears below the fifth card.
 
 ### Trade Cards — Initial State
 
@@ -174,11 +193,84 @@
   - **Before**: All 5 cards visible (assuming none were previously ignored)
   - **Expected**: After ignoring all cards, the feed shows the empty state: title "No trades to show", subtitle "No recent politician disclosures found." Header still shows "Recent Trades".
 
+### Feed — Lazy-Load ("Show more")
+
+- [ ] **[Feed > Show more > button appears on initial render]**: Load Feed when more than 5 non-ignored trades are available
+  - **Before**: Feed skeleton just cleared; more than 5 trades in the visible (non-ignored) set
+  - **Expected**: Exactly 5 trade cards are rendered in `#feed-cards`. Below the fifth card, a full-width ghost button labeled "Show more (N remaining)" is visible, where N = total visible trades minus 5. Button uses the `btn btn-ghost` classes, width 100%, font-size 13px.
+
+- [ ] **[Feed > Show more > button absent when ≤ 5 trades]**: Load Feed when 5 or fewer non-ignored trades exist
+  - **Before**: Feed loads with exactly 5 or fewer trades
+  - **Expected**: No "Show more" button is rendered. All trades are visible immediately. `_buildShowMoreBtn()` returns an empty string when `remaining <= 0`.
+
+- [ ] **[Feed > Show more > tap appends 5 more cards]**: With 10+ total visible trades, tap "Show more" once
+  - **Before**: 5 cards visible; button reads "Show more (N remaining)" where N ≥ 5
+  - **Expected**: 5 additional trade cards appear below the existing 5 without re-rendering the first 5. Existing cards retain their exact DOM state — expanded/collapsed state, followed styling, and left border are unchanged. Button label updates to "Show more (N−5 remaining)". Total card count in `#feed-cards` is now 10.
+  - **Regression**: Confirms DocumentFragment append path: new cards are appended, not a full `innerHTML` replacement.
+
+- [ ] **[Feed > Show more > existing card expand state preserved]**: Expand card 1 (tap its body), then tap "Show more"
+  - **Before**: Card 1 is expanded (`data-expanded="true"`); summary section visible
+  - **Expected**: After "Show more" appends 5 new cards, card 1 remains expanded. The expanded section is still visible. `data-expanded` is still `"true"`. No visual flicker or collapse on card 1.
+  - **Regression**: Core lazy-load correctness — innerHTML replace would collapse all expanded cards; append must not.
+
+- [ ] **[Feed > Show more > existing followed card preserved]**: Follow card 2 (tap its Follow button), then tap "Show more"
+  - **Before**: Card 2 shows "✓ Follow" with green border; remaining cards are in default state
+  - **Expected**: After "Show more" appends new cards, card 2 still shows "✓ Follow" with intensified green button background (`rgba(127,184,131,0.22)`) and 3 px green left border. The newly appended cards appear in their default (unfollowed) state. `_applyFollowedUI` was NOT re-run on card 2 (it retained its DOM state from before the append).
+  - **Regression**: Follow state must survive "Show more" without being cleared or duplicated.
+
+- [ ] **[Feed > Show more > newly appended cards — follow works]**: After tapping "Show more" to reveal new cards, tap "Follow" on one of the newly appended cards (e.g. card 6)
+  - **Before**: New cards visible from "Show more"; card 6 shows "Follow" in default state
+  - **Expected**: Card 6's Follow button changes to "✓ Follow" with green styling and 3 px left border. `sth_trade_decisions` in localStorage is updated with that trade's ID as "followed". The follow action works identically to cards from the initial render batch. `_attachHandlersForBatch()` wired the new cards' event listeners correctly.
+
+- [ ] **[Feed > Show more > newly appended cards — ignore works]**: After tapping "Show more", tap "Ignore" on one of the newly appended cards (e.g. card 7)
+  - **Before**: New cards visible; card 7 in default state
+  - **Expected**: Card 7 animates out over ~300ms (opacity → 0, max-height collapse), then its element is removed from the DOM after 320ms. localStorage is updated. Remaining cards close the gap. The ignore animation is identical to the initial-batch cards.
+
+- [ ] **[Feed > Show more > newly appended cards — expand/collapse works]**: After "Show more", tap the body of a newly appended card (e.g. card 8) to expand it
+  - **Before**: Card 8 is collapsed
+  - **Expected**: Card 8's expanded section becomes visible (`display: block`). `data-expanded` changes to `"true"`. The expand is triggered by the delegated `click` listener on the container, which covers both initial-batch and appended cards. No separate listener registration is needed for expand — it uses event delegation.
+
+- [ ] **[Feed > Show more > button label updates correctly]**: With 12 total visible trades, tap "Show more" once
+  - **Before**: 5 cards shown; button reads "Show more (7 remaining)"
+  - **Expected**: After tap, 10 cards shown; button reads "Show more (2 remaining)". The label count reflects exactly `_allVisibleTrades.length - _displayCount`.
+
+- [ ] **[Feed > Show more > button disappears on last batch]**: Tap "Show more" until all trades are visible
+  - **Before**: Button shows "Show more (N remaining)" where N ≤ 5
+  - **Expected**: After the final tap that shows the last remaining cards, the "Show more" button is removed from the DOM entirely (`btn.remove()` is called). No empty or disabled button remains. All trades are now visible.
+
+- [ ] **[Feed > Show more > button disappears immediately when exactly 5 remain]**: 10 total trades; button reads "Show more (5 remaining)"; tap it
+  - **Before**: 5 cards shown; exactly 5 remain
+  - **Expected**: All 5 remaining cards append. `remaining = 10 - 10 = 0`. `btn.remove()` fires. Button is gone. No lingering "Show more (0 remaining)" label.
+
+- [ ] **[Feed > Show more > double-tap does not duplicate cards]**: Tap "Show more" twice in rapid succession (~100ms between taps)
+  - **Before**: "Show more" button visible with ≥ 5 remaining trades
+  - **Expected**: Only one batch of 5 cards is appended. The second tap is rejected by the `_showMorePending` guard (`if (_showMorePending) return`). `_displayCount` increments only once. Total card count increases by exactly 5, not 10.
+  - **Regression**: Core double-tap deduplication — without `_showMorePending`, rapid taps insert duplicate cards from the same batch indices.
+
+- [ ] **[Feed > Show more > newly appended followed cards restored on re-render]**: Follow a trade from the second batch (e.g. card 8), navigate to Home, then return to Feed
+  - **Before**: Card 8 was followed in a previous Feed session
+  - **Expected**: On re-render, Feed shows the initial 5 cards. Card 8 is NOT in the first 5 (it requires a "Show more" tap). After tapping "Show more", card 8 appears and `_applyFollowedUI` is called during the append via `decisions[trade.id] === 'followed'` check. Card 8 shows "✓ Follow" with green border immediately on append.
+  - **Regression**: Confirms `_attachShowMoreHandler` restores followed state on append, not just initial batch.
+
+- [ ] **[Feed > Show more > navigate away mid-append is safe]**: Tap "Show more" and immediately tap ← back before the append completes
+  - **Before**: "Show more" was tapped; `_showMorePending = true`; append code running synchronously
+  - **Expected**: Home view renders correctly. No stale Feed content appears. The `signal` abort path and `container.isConnected` guard prevent any post-navigation DOM writes. The "Show more" operation is synchronous (no async), so in practice the append completes before the navigation handler runs — but no crash occurs either way.
+
+- [ ] **[Feed > Show more > pagination resets on re-entry]**: Tap "Show more" twice (showing 15 cards), navigate to Home, return to Feed
+  - **Before**: Feed was showing 15 cards (3 batches) on previous visit
+  - **Expected**: On re-entry, Feed re-renders from scratch. `renderFeed()` resets `_displayCount = 5` and `_allVisibleTrades = visibleTrades`. Only the first 5 cards are shown. "Show more" button reappears with full remaining count. Previous pagination position is not preserved across navigations.
+
+---
+
 ### Feed — Scroll
 
-- [ ] **[Feed > Scroll to bottom]**: Scroll down through all 5 trade cards
-  - **Before**: Feed at top
-  - **Expected**: All cards reachable by scrolling. No content cut off at the bottom. Page does not crash or freeze.
+- [ ] **[Feed > Scroll to bottom — initial 5 cards]**: Scroll down through the first 5 trade cards before tapping "Show more"
+  - **Before**: Feed at top; 5 cards and "Show more" button visible
+  - **Expected**: All 5 cards and the "Show more" button are reachable by scrolling. Button is fully visible and tappable (not clipped by viewport). No content cut off at the bottom. Page does not crash or freeze.
+
+- [ ] **[Feed > Scroll to bottom — after Show more]**: After tapping "Show more" once (10 cards now visible), scroll down
+  - **Before**: 10 cards and optionally another "Show more" button visible
+  - **Expected**: All 10 cards reachable. The "Show more" button (if present) is fully visible below card 10. No content clipped.
 
 - [ ] **[Feed > Scroll back to top]**: After scrolling to bottom, scroll back to top
   - **Before**: Feed scrolled to bottom
@@ -782,6 +874,14 @@ These tests target specific known failure modes. Run them in order after any cod
   - **Before**: Step 2 was the last What to Buy state before backing out
   - **Expected**: Step 1 renders fresh on re-entry — amount input shows "150", pick count shows "3". No Step 2 content leaks through. `renderWhatToBuy(container)` is always called fresh on navigation.
 
+- [ ] **[Crash > Home What's New live fetch — back during load]**: Cold-load the app; immediately tap "What's New" while the home view is still resolving the `fetchAllTransactions()` call for the What's New card
+  - **Before**: Home is rendering; `fetchAllTransactions()` is in-flight for the What's New tile; user taps the tile before the fetch settles
+  - **Expected**: Feed renders normally with its own skeleton. No double-fetch error. No blank screen. Home's in-flight `fetchAllTransactions()` promise resolves or rejects silently after navigation (the `if (signal?.aborted) return` guard prevents the stale result from writing back to the Home container). Feed runs its own independent fetch.
+
+- [ ] **[Crash > Feed Show more — rapid open/close]**: Navigate to Feed (Show more button visible), tap "Show more" once, immediately tap ← back, then immediately tap "What's New" to re-enter Feed
+  - **Before**: Mid-animation state possible; `_showMorePending` may still be true
+  - **Expected**: Feed re-renders cleanly from scratch on re-entry (`_showMorePending` is reset to `false` inside `renderFeed()`). Exactly 5 cards are shown. "Show more" button visible with correct remaining count. No duplicated cards from the previous partial append.
+
 - [ ] **[Crash > Double-fire settings button from home]**: Tap ⚙ twice very rapidly from Home
   - **Before**: Home view
   - **Expected**: Settings renders once. The `navigate()` guard (`if (viewName === activeView) return`) prevents double-render. No duplicate event listeners attached to the Save button. Save button toast fires exactly once per physical tap.
@@ -1105,4 +1205,4 @@ These tests target specific known failure modes. Run them in order after any cod
 
 ---
 
-*Last updated: 2026-03-15*
+*Last updated: 2026-03-20*
