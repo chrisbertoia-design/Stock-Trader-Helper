@@ -6,8 +6,11 @@
  */
 
 import { getPositionsSummary, getPositions } from '../../stores/positions.js'
-import { fetchAllTransactions, filterByWatchlist } from '../../api/congressional.js'
+import { fetchAllTransactions, filterByWatchlist, computeConsensusSignals } from '../../api/congressional.js'
+import { getConfig } from '../../stores/config.js'
 import { WATCHLIST } from '../../data/watchlist.js'
+
+const PARTY_ROSTER = { D: 213, R: 222 }
 
 function isMockPositions() {
   const positions = getPositions()
