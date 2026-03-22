@@ -5,9 +5,7 @@
  */
 
 import { fetchAllTransactions, computeConsensusSignals } from '../../api/congressional.js'
-import { getConfig, get as configGet } from '../../stores/config.js'
-
-const PARTY_ROSTER = { D: 213, R: 222 }
+import { getConfig, get as configGet, getPartyRoster } from '../../stores/config.js'
 
 const MOCK_SIGNALS = [
   {
@@ -228,9 +226,10 @@ async function _loadSignals(container, signal, { forceRefresh = false } = {}) {
     // Watchlist filter shrinks the denominator incorrectly (11 watched Dems / 213 total Dems
     // = 5.2%, below the 8% tier1 threshold, so nothing passes). Top Signal shows Congress-wide
     // activity, not just followed politicians.
+    const partyRoster = getPartyRoster()
     const rawSignals = computeConsensusSignals(allTx, {
       config: { ...getConfig(), consensus_window_days: windowDays },
-      partyRoster: PARTY_ROSTER
+      partyRoster
     })
 
     // Derive card details (buyCount, sellCount, topTrader) from the active time window

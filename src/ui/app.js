@@ -11,6 +11,7 @@ import { renderPositions } from './views/positions.js'
 import { renderSettings }  from './views/settings.js'
 import { renderWhatToBuy } from './views/whatToBuy.js'
 import { renderTopSignal }  from './views/topSignal.js'
+import { renderDecisionsHistory } from './views/decisionsHistory.js'
 
 const CAT = 'APP_SHELL'
 
@@ -53,6 +54,10 @@ export function renderApp({ spreadsheetId }) {
     info(CAT, `Navigate: ${viewName}`)
     _persistView(viewName)
 
+    // Push URL state so browser back/forward work and views are deep-linkable
+    const hashPath = viewName === 'home' ? '#/' : `#/${viewName}`
+    try { history.pushState({ view: viewName }, '', hashPath) } catch (_) { /* sandboxed iframe */ }
+
     backBtn.classList.toggle('hidden', viewName === 'home')
     settingsBtn.classList.toggle('hidden', viewName === 'settings')
 
@@ -65,6 +70,7 @@ export function renderApp({ spreadsheetId }) {
       else if (viewName === 'settings')  await renderSettings(viewContent, signal)
       else if (viewName === 'whatToBuy') await renderWhatToBuy(viewContent, signal)
       else if (viewName === 'topSignal') await renderTopSignal(viewContent, signal)
+      else if (viewName === 'decisionsHistory') await renderDecisionsHistory(viewContent, signal)
     } catch (e) {
       if (e.name === 'AbortError') return  // navigation cancelled — ignore
       console.error('[APP] render error:', e)
@@ -79,12 +85,19 @@ export function renderApp({ spreadsheetId }) {
   // Expose globally — all views use window._navigate('viewName') in onclick
   window._navigate = navigate
 
+  // Browser back/forward — restore view from history state
+  window.addEventListener('popstate', (e) => {
+    const view = (e.state?.view) || 'home'
+    navigate(view)
+  })
+
   backBtn.addEventListener('click',    () => navigate('home'))
   settingsBtn.addEventListener('click', () => navigate('settings'))
 
-  // Option A: restore last view on reload (sessionStorage — clears on tab close)
-  const lastView = sessionStorage.getItem('sth_last_view')
-  navigate(lastView && lastView !== 'home' ? lastView : 'home')
+  // URL hash takes priority over sessionStorage for deep links and page reloads
+  const hashView = window.location.hash.replace(/^#\/?/, '') || ''
+  const lastView  = hashView || sessionStorage.getItem('sth_last_view') || 'home'
+  navigate(lastView)
 }
 
 function _persistView(viewName) {

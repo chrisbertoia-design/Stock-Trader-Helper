@@ -168,6 +168,55 @@ function _wireUpload(container, signal) {
           info(CAT, `Parsed positions CSV — ${Object.keys(parsed).length} tickers`)
         }
 
+        // ── Preview modal — show parsed results before committing ──────────────
+        const count = Object.keys(parsed).length
+        const totalMktVal = Object.values(parsed).reduce((sum, p) => sum + (p.mkt_value || 0), 0)
+        const fmt$ = n => n >= 1_000_000 ? `$${(n/1_000_000).toFixed(2)}M` : n >= 1_000 ? `$${(n/1_000).toFixed(1)}k` : `$${n.toFixed(0)}`
+        const topRows = Object.values(parsed)
+          .sort((a, b) => (b.mkt_value || 0) - (a.mkt_value || 0))
+          .slice(0, 8)
+
+        const confirmed = await new Promise(resolve => {
+          const modal = document.createElement('div')
+          modal.style.cssText = 'position:fixed;inset:0;z-index:100;background:rgba(0,0,0,0.7);display:flex;align-items:flex-end;justify-content:center;padding:var(--s4);'
+          modal.innerHTML = `
+            <div style="background:var(--bg-raised);border:1px solid var(--border-soft);border-radius:var(--r3);padding:var(--s5);width:100%;max-width:480px;max-height:80vh;overflow-y:auto;">
+              <div style="font-size:15px;font-weight:600;color:var(--text-primary);margin-bottom:var(--s1);">Preview: ${count} positions · ${fmt$(totalMktVal)}</div>
+              <div style="font-size:12px;color:var(--text-secondary);margin-bottom:var(--s4);">${isTransactions ? 'Derived from transactions CSV' : 'From positions export'}</div>
+              <div style="margin-bottom:var(--s4);">
+                ${topRows.map(p => `
+                  <div style="display:flex;justify-content:space-between;align-items:center;padding:var(--s2) 0;border-bottom:1px solid var(--border-subtle);">
+                    <span style="font-family:var(--font-mono);font-size:13px;font-weight:600;">${p.ticker}</span>
+                    <span style="font-size:13px;color:var(--text-secondary);">${p.mkt_value ? fmt$(p.mkt_value) : '—'}</span>
+                  </div>
+                `).join('')}
+                ${count > 8 ? `<div style="font-size:12px;color:var(--text-tertiary);padding-top:var(--s2);">…and ${count - 8} more</div>` : ''}
+              </div>
+              <div style="display:flex;gap:var(--s3);">
+                <button id="preview-cancel" class="btn btn-ghost" style="flex:1;">Cancel</button>
+                <button id="preview-confirm" class="btn" style="flex:1;background:var(--accent);color:var(--bg-primary);border:none;">Upload ${count} positions</button>
+              </div>
+            </div>
+          `
+          document.body.appendChild(modal)
+
+          const cleanup = (result) => { modal.remove(); resolve(result) }
+          modal.addEventListener('click', e => { if (e.target === modal) cleanup(false) })
+          modal.querySelector('#preview-cancel').addEventListener('click', () => cleanup(false))
+          modal.querySelector('#preview-confirm').addEventListener('click', () => cleanup(true))
+
+          // Auto-cancel if navigation signal fires
+          signal?.addEventListener('abort', () => cleanup(false), { once: true })
+        })
+
+        if (!confirmed) {
+          _setBtnState('Upload CSV', false)
+          input.value = ''
+          return
+        }
+
+        if (signal?.aborted || !container.isConnected) return
+
         // Update in-memory store
         setPositions(parsed)
 
@@ -195,7 +244,6 @@ function _wireUpload(container, signal) {
           }
         }
 
-        const count = Object.keys(parsed).length
         const toastMsg = isTransactions
           ? `${count} positions derived from ${rawTxCount} transactions`
           : `${count} positions loaded from positions export`

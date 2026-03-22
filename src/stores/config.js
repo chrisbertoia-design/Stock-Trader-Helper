@@ -60,3 +60,11 @@ export async function saveEditableConfig(updates) {
   info(CAT, `saveEditableConfig — saving ${Object.keys(changed).length} changed keys in one batch call`)
   await writeConfigBatch(changed)
 }
+
+/** Returns party roster sizes — reads from config with hardcoded fallbacks. */
+export function getPartyRoster() {
+  return {
+    D: parseInt(get('party_roster_d', '213')) || 213,
+    R: parseInt(get('party_roster_r', '222')) || 222,
+  }
+}

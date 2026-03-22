@@ -96,6 +96,20 @@ export const SCHEMA = {
   ]
 }
 
+// Column bounds for readTab — prevents fetching A:ZZ when schema is known.
+// Column letter = String.fromCharCode(64 + count). All schemas are ≤ 26 cols.
+const SCHEMA_COLS = {
+  config:          'D',   // 4 cols
+  log:             'F',   // 6 cols
+  watchlist:       'K',   // 11 cols
+  disclosures:     'M',   // 13 cols
+  consensus:       'L',   // 12 cols
+  recommendations: 'J',   // 10 cols
+  my_decisions:    'H',   // 8 cols
+  my_allocations:  'H',   // 8 cols
+  my_positions:    'H',   // 8 cols
+}
+
 // ─── Default config values ───────────────────────────────────────────────────
 
 export const DEFAULT_CONFIG = [
@@ -122,6 +136,10 @@ export const DEFAULT_CONFIG = [
 
   // S&P 500
   ['sp500_last_update',     '', 'ISO date of last S&P 500 list refresh', ''],
+
+  // Party roster sizes (used for consensus % calculation)
+  ['party_roster_d', '213', 'Number of Democrats in House (update after elections)', ''],
+  ['party_roster_r', '222', 'Number of Republicans in House (update after elections)', ''],
 
   // Logging
   ['log_level',             'DEBUG', 'Minimum log level: DEBUG | INFO | WARN | ERROR', ''],
@@ -222,7 +240,7 @@ export async function writeConfigBatch(updates) {
 // ─── Generic tab operations ───────────────────────────────────────────────────
 
 export async function readTab(tabName, range = null) {
-  const r = range ?? `${tabName}!A:ZZ`
+  const r = range ?? (SCHEMA_COLS[tabName] ? `${tabName}!A:${SCHEMA_COLS[tabName]}` : `${tabName}!A:ZZ`)
   debug(CAT, `readTab: ${r}`)
   const res = await _apiGet(`values/${encodeURIComponent(r)}`)
   const rows = (res.values ?? []).slice(1) // skip header
@@ -257,8 +275,9 @@ export async function updateCell(a1, value) {
  */
 export async function clearTab(tabName) {
   debug(CAT, `clearTab: ${tabName}`)
+  const endCol = SCHEMA_COLS[tabName] ?? 'ZZ'
   await _apiPost(
-    `values/${encodeURIComponent(tabName + '!A2:ZZ')}:clear`,
+    `values/${encodeURIComponent(`${tabName}!A2:${endCol}`)}:clear`,
     {}
   )
   info(CAT, `clearTab: ${tabName} data rows cleared`)

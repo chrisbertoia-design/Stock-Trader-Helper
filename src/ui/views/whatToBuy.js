@@ -6,9 +6,7 @@
 
 import { fetchAllTransactions, computeConsensusSignals } from '../../api/congressional.js'
 import { getPositions }                                   from '../../stores/positions.js'
-import { getConfig }                                      from '../../stores/config.js'
-
-const PARTY_ROSTER = { D: 213, R: 222 }
+import { getConfig, getPartyRoster }                      from '../../stores/config.js'
 
 const MOCK_PICKS = [
   { ticker: 'NVDA', pct: 0.22, rationale: 'Pelosi + 14% of Congress buying. AI chip tailwind.', followed: true,  owned: 2800,  alignment: 'aligned'  },
@@ -142,7 +140,8 @@ async function _submit(container, signal) {
 
     if (signal?.aborted) return
 
-    const rawSignals = computeConsensusSignals(allTx, { config: getConfig(), partyRoster: PARTY_ROSTER })
+    const partyRoster = getPartyRoster()
+    const rawSignals = computeConsensusSignals(allTx, { config: getConfig(), partyRoster })
     picks = _derivePicksFromSignals(rawSignals, positions || {}, pickCount)
 
     if (!picks.length) {

@@ -7,10 +7,8 @@
 
 import { getPositionsSummary, getPositions, loadPositions } from '../../stores/positions.js'
 import { fetchAllTransactions, filterByWatchlist, computeConsensusSignals } from '../../api/congressional.js'
-import { getConfig } from '../../stores/config.js'
+import { getConfig, getPartyRoster } from '../../stores/config.js'
 import { WATCHLIST } from '../../data/watchlist.js'
-
-const PARTY_ROSTER = { D: 213, R: 222 }
 
 function isMockPositions() {
   const positions = getPositions()
@@ -49,6 +47,26 @@ function _relDate(s) {
 // ── Render ────────────────────────────────────────────────────────────────────
 
 export async function renderHome(container, signal) {
+  // Render skeleton immediately — never block on network
+  const shimmer = `background:linear-gradient(90deg,var(--bg-raised) 25%,var(--bg-elevated) 50%,var(--bg-raised) 75%);background-size:200% 100%;animation:shimmer 1.5s infinite;`
+  container.innerHTML = `
+    <div class="home-wrapper">
+      <div class="home-greet-block">
+        <div style="height:20px;width:140px;border-radius:var(--r2);${shimmer}"></div>
+        <div style="height:14px;width:100px;border-radius:var(--r2);margin-top:var(--s2);${shimmer}"></div>
+      </div>
+      <div class="home-cards">
+        ${Array(4).fill('').map(() => `
+          <div class="home-card" style="pointer-events:none;">
+            <div style="height:14px;width:60%;border-radius:var(--r2);${shimmer}"></div>
+            <div style="height:20px;width:40%;border-radius:var(--r2);margin-top:var(--s3);${shimmer}"></div>
+            <div style="height:12px;width:75%;border-radius:var(--r2);margin-top:var(--s2);${shimmer}"></div>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+  `
+
   // ── Load positions + feed data concurrently ──────────────────────────────────
   // loadPositions() reads from Sheets (or returns cached). Running it in parallel
   // with fetchAllTransactions() means zero added wait — both are network calls.
@@ -78,9 +96,10 @@ export async function renderHome(container, signal) {
     }
 
     // Top Signal: compute from ALL of Congress (30-day window matches realistic threshold crossings)
+    const partyRoster = getPartyRoster()
     const rawSignals = computeConsensusSignals(trades, {
       config: { ...getConfig(), consensus_window_days: 30 },
-      partyRoster: PARTY_ROSTER,
+      partyRoster,
     })
     if (rawSignals.length > 0) {
       // Group by ticker, merge D + R rows, find the strongest
@@ -112,6 +131,11 @@ export async function renderHome(container, signal) {
   }
 
   // Read positions AFTER loadPositions() has resolved above
+  const _decisions = (() => {
+    try { return JSON.parse(localStorage.getItem('sth_trade_decisions') || '{}') } catch { return {} }
+  })()
+  const followedCount = Object.values(_decisions).filter(d => d === 'followed').length
+
   const posSummary    = getPositionsSummary()
   const posIsMock     = isMockPositions()
   const accountTotal  = posSummary.account_total  || 0
@@ -205,6 +229,16 @@ export async function renderHome(container, signal) {
           </div>
           <div class="home-card-value">Ready to invest?</div>
           <div class="home-card-sub">Enter an amount to get slice picks</div>
+        </button>
+
+        <!-- My Decisions -->
+        <button class="home-card" onclick="window._navigate('decisionsHistory')">
+          <div class="home-card-header">
+            <span class="home-card-title">My Decisions</span>
+            <span class="home-card-chevron">›</span>
+          </div>
+          <div class="home-card-value">${followedCount} followed</div>
+          <div class="home-card-sub">Your trade follow history</div>
         </button>
 
       </div>
