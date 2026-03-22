@@ -5,7 +5,7 @@
  * Cards use onclick="window._navigate(...)" — no closure, no async.
  */
 
-import { getPositionsSummary, getPositions } from '../../stores/positions.js'
+import { getPositionsSummary, getPositions, loadPositions } from '../../stores/positions.js'
 import { fetchAllTransactions, filterByWatchlist, computeConsensusSignals } from '../../api/congressional.js'
 import { getConfig } from '../../stores/config.js'
 import { WATCHLIST } from '../../data/watchlist.js'
@@ -49,27 +49,18 @@ function _relDate(s) {
 // ── Render ────────────────────────────────────────────────────────────────────
 
 export async function renderHome(container, signal) {
-  // ── Live portfolio data ──────────────────────────────────────────────────────
-  const posSummary    = getPositionsSummary()
-  const posIsMock     = isMockPositions()
-
-  const accountTotal  = posSummary.account_total  || 0
-  const totalGlPct    = posSummary.total_gl_pct   || 0
-  const positionCount = posSummary.position_count || 0
-  const lastUpload    = posSummary.last_csv_upload
-
-  const lastUpdatedFmt = lastUpload
-    ? new Date(lastUpload + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-    : null
-
-  const glSign  = totalGlPct >= 0 ? '+' : ''
-  const glColor = totalGlPct >= 0 ? 'var(--buy)' : 'var(--sell)'
-
-  // ── Live feed + signal data ──────────────────────────────────────────────────
+  // ── Load positions + feed data concurrently ──────────────────────────────────
+  // loadPositions() reads from Sheets (or returns cached). Running it in parallel
+  // with fetchAllTransactions() means zero added wait — both are network calls.
+  // Without this, getPositionsSummary() below always returns mock on fresh open
+  // because _positions is null until someone calls loadPositions().
   let feedData   = { newCount: 0, topTrade: null }
   let signalData = null  // null = unavailable, show placeholder
   try {
-    const trades = await fetchAllTransactions()
+    const [, trades] = await Promise.all([
+      loadPositions().catch(() => null),  // non-fatal: fall back to mock on error
+      fetchAllTransactions(),
+    ])
     if (signal?.aborted) return
 
     // What's New: watchlist-filtered last 90 days
@@ -119,6 +110,19 @@ export async function renderHome(container, signal) {
   } catch (_e) {
     // silent fallback — feed shows 0 new trades, signal shows placeholder
   }
+
+  // Read positions AFTER loadPositions() has resolved above
+  const posSummary    = getPositionsSummary()
+  const posIsMock     = isMockPositions()
+  const accountTotal  = posSummary.account_total  || 0
+  const totalGlPct    = posSummary.total_gl_pct   || 0
+  const positionCount = posSummary.position_count || 0
+  const lastUpload    = posSummary.last_csv_upload
+  const lastUpdatedFmt = lastUpload
+    ? new Date(lastUpload + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+    : null
+  const glSign  = totalGlPct >= 0 ? '+' : ''
+  const glColor = totalGlPct >= 0 ? 'var(--buy)' : 'var(--sell)'
 
   const { newCount, topTrade } = feedData
   const sigTicker = signalData?.ticker ?? '—'
