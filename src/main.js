@@ -9,7 +9,7 @@
  *  5. Init Sheets + load config in background (non-blocking)
  */
 
-import { initSheets, writeLogEntries } from './api/googleSheets.js'
+import { initSheets, writeLogEntries, setSpreadsheetId, setAccessToken } from './api/googleSheets.js'
 import { initLogger, info, warn, error } from './services/logger.js'
 import { loadConfig }                    from './stores/config.js'
 import { renderApp }                     from './ui/app.js'
@@ -43,6 +43,12 @@ async function boot() {
       return
     }
   }
+
+  // ── Pre-seed credentials so loadPositions() can read Sheets on first call ──
+  // Without this, renderApp() → navigate(lastView) → loadPositions() runs before
+  // _connectSheets() sets _spreadsheetId, causing mock data to be permanently cached.
+  setSpreadsheetId(spreadsheetId)
+  setAccessToken(accessToken)
 
   // ── Render immediately — never block on Sheets ──────────────────────────
   info('BOOT', 'Rendering app (Sheets connecting in background)')

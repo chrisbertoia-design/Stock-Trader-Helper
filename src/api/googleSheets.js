@@ -156,8 +156,9 @@ export async function initSheets(spreadsheetId, accessToken) {
   info(CAT, 'Google Sheets initialized', { spreadsheetId })
 }
 
-export function getSpreadsheetId() { return _spreadsheetId }
-export function setAccessToken(t)  { _accessToken = t }
+export function getSpreadsheetId()  { return _spreadsheetId }
+export function setSpreadsheetId(id) { _spreadsheetId = id }
+export function setAccessToken(t)   { _accessToken = t }
 
 // ─── Config read/write ────────────────────────────────────────────────────────
 
