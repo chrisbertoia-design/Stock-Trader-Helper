@@ -137,17 +137,32 @@ export function parsePositionsCsv(csvText) {
   const headerIdx = lines.findIndex(l => /symbol/i.test(l) && /quantity/i.test(l))
   if (headerIdx === -1) throw new Error('Could not find positions header row')
 
-  const headers = _splitCsvLine(lines[headerIdx]).map(h => h.toLowerCase().replace(/[^a-z0-9]/g, '_'))
+  // Normalized headers (alpha/numeric only) — for most column detection
+  const headers = _splitCsvLine(lines[headerIdx]).map(h => h.replace(/"/g, '').toLowerCase().replace(/[^a-z0-9]/g, '_'))
+  // Raw lowercase headers with '$' and '%' preserved — needed to distinguish gain/loss columns
+  const rawHeaders = _splitCsvLine(lines[headerIdx]).map(h => h.replace(/"/g, '').toLowerCase())
 
-  // Build flexible column index map — Schwab renames columns across export versions
+  // Build flexible column index map — Schwab renames columns across export versions.
+  //
+  // colIdx comment format: r[N] // column_name (schema: col0, col1, ...)
+  //
+  // NOTE: 'Gain/Loss $' and 'Gain/Loss %' both normalize to 'gain_loss__' — identical after
+  // stripping non-alphanumeric. Use rawHeaders (which preserves '$' vs '%') to distinguish.
+  //
+  // NOTE: 'Cost Basis' is TOTAL cost basis (not per-share). avg_cost = cost_basis_total / quantity.
   const colIdx = {
-    symbol:    headers.findIndex(h => h === 'symbol'),
-    quantity:  headers.findIndex(h => h.includes('qty') || h.includes('quantity')),
-    price:     headers.findIndex(h => h === 'price'),
-    mkt_value: headers.findIndex(h => h.includes('market_value') || h.includes('mkt_value') || (h.includes('value') && !h.includes('day'))),
-    avg_cost:  headers.findIndex(h => h.includes('average_cost') || h.includes('cost_basis_per_share') || h.includes('avg_cost')),
-    gain_loss: headers.findIndex(h => (h.includes('gain') || h.includes('unrealized')) && !h.includes('pct') && !h.includes('percent') && !h.includes('_1') && !h.endsWith('__')),
-    gl_pct:    headers.findIndex(h => (h.includes('gain') || h.includes('unrealized')) && (h.includes('pct') || h.includes('percent') || h.endsWith('_1') || h.endsWith('__'))),
+    symbol:           headers.findIndex(h => h === 'symbol'),
+    quantity:         headers.findIndex(h => h.includes('qty') || h.includes('quantity')),
+    price:            headers.findIndex(h => h === 'price'),
+    mkt_value:        headers.findIndex(h => h.includes('market_value') || h.includes('mkt_value') || (h.includes('value') && !h.includes('day'))),
+    // Per-share avg cost — Schwab sometimes exports this explicitly
+    avg_cost_direct:  headers.findIndex(h => h.includes('average_cost') || h.includes('cost_basis_per_share') || h.includes('avg_cost')),
+    // Total cost basis — used to derive per-share avg cost when no direct column exists
+    cost_basis_total: headers.findIndex(h => h === 'cost_basis'),
+    // Dollar gain/loss (e.g. 'Gain/Loss $') — identified by '$' in raw header
+    gain_loss:        rawHeaders.findIndex(h => (h.includes('gain') || h.includes('unrealized')) && h.includes('$') && !h.includes('%')),
+    // Percentage gain/loss (e.g. 'Gain/Loss %') — identified by '%' in raw header
+    gl_pct:           rawHeaders.findIndex(h => (h.includes('gain') || h.includes('unrealized')) && h.includes('%') && !h.includes('$')),
   }
   debug(CAT, 'colIdx map', JSON.stringify(colIdx))
 
@@ -160,15 +175,49 @@ export function parsePositionsCsv(csvText) {
       if (cols.length < 3) continue
 
       const sym = _normalizeTicker((colIdx.symbol >= 0 ? cols[colIdx.symbol] : '').replace(/"/g, '').trim().toUpperCase())
-      if (!sym || sym === 'ACCOUNT') continue
+      if (!sym) continue
+
+      // Skip 'Account Total' summary rows — 'ACCOUNT', 'ACCOUNT TOTAL', etc.
+      if (sym.startsWith('ACCOUNT')) continue
+
+      // Detect cash row — 'Cash & Cash Investments', 'Cash', '$'
+      // Normalized to CASH ticker so getPositionsSummary() can identify it.
+      if (sym.startsWith('CASH') || sym === '$') {
+        const cashMktVal = _parseNum(colIdx.mkt_value >= 0 ? cols[colIdx.mkt_value] : '0')
+        positions['CASH'] = {
+          ticker:          'CASH',
+          quantity:        0,
+          avg_cost:        0,
+          mkt_value:       cashMktVal,
+          gain_loss:       0,
+          gain_loss_pct:   0,
+          last_csv_upload: new Date().toISOString().slice(0, 10),
+          source:          'schwab_csv'
+        }
+        continue
+      }
+
+      const quantity      = _parseNum(colIdx.quantity  >= 0 ? cols[colIdx.quantity]  : '0')
+      const mkt_value     = _parseNum(colIdx.mkt_value >= 0 ? cols[colIdx.mkt_value] : '0')
+      const gain_loss     = _parseNum(colIdx.gain_loss >= 0 ? cols[colIdx.gain_loss] : '0')
+      const gain_loss_pct = _parseNum(colIdx.gl_pct    >= 0 ? cols[colIdx.gl_pct]    : '0')
+
+      // avg_cost: prefer direct per-share column; derive from total cost basis / qty otherwise
+      let avg_cost = 0
+      if (colIdx.avg_cost_direct >= 0) {
+        avg_cost = _parseNum(cols[colIdx.avg_cost_direct])
+      } else if (colIdx.cost_basis_total >= 0) {
+        const costTotal = _parseNum(cols[colIdx.cost_basis_total])
+        avg_cost = quantity > 0 ? Math.round(costTotal / quantity * 100) / 100 : 0
+      }
 
       positions[sym] = {
         ticker:          sym,
-        quantity:        _parseNum(colIdx.quantity  >= 0 ? cols[colIdx.quantity]  : '0'),
-        avg_cost:        _parseNum(colIdx.avg_cost  >= 0 ? cols[colIdx.avg_cost]  : '0'),
-        mkt_value:       _parseNum(colIdx.mkt_value >= 0 ? cols[colIdx.mkt_value] : '0'),
-        gain_loss:       _parseNum(colIdx.gain_loss >= 0 ? cols[colIdx.gain_loss] : '0'),
-        gain_loss_pct:   _parseNum(colIdx.gl_pct    >= 0 ? cols[colIdx.gl_pct]    : '0'),
+        quantity,
+        avg_cost,
+        mkt_value,
+        gain_loss,
+        gain_loss_pct,
         last_csv_upload: new Date().toISOString().slice(0, 10),
         source:          'schwab_csv'
       }

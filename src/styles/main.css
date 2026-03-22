@@ -118,6 +118,7 @@ body {
   align-items: center;
   justify-content: space-between;
   padding: var(--s4) var(--s5);
+  padding-top: calc(var(--s4) + env(safe-area-inset-top));
   min-height: 56px;
   border-bottom: 1px solid var(--border-subtle);
   flex-shrink: 0;
@@ -572,6 +573,7 @@ body {
   align-items: center;
   gap: var(--s3);
   padding: var(--s4) var(--s5);
+  padding-top: calc(var(--s4) + env(safe-area-inset-top));
   border-bottom: 1px solid var(--border-subtle);
 }
 
