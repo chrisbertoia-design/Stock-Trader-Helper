@@ -19,38 +19,92 @@ const OUT_PATH = resolve(__dirname, '..', 'public', 'congressional-trades.json')
 
 const API_KEY = process.env.VITE_ANTHROPIC_API_KEY;
 
+// Seed trades: 100 entries with enough unique politicians per ticker to cross tier1 (8% of 213 Dems = 18 needed).
+// NVDA: 20 unique D buyers, AAPL: 18 unique D buyers, MSFT: 8 D + 8 R buyers.
 const SEED_TRADES = [
-  { id: 'Pelosi_NVDA_seed',        politician_name: 'Nancy Pelosi',           party: 'D', ticker: 'NVDA',  action: 'buy',  amount_low: 250001, amount_high: 500000,  sp500: 'Y' },
-  { id: 'Gottheimer_MSFT_seed',    politician_name: 'Josh Gottheimer',        party: 'D', ticker: 'MSFT',  action: 'buy',  amount_low: 15001,  amount_high: 50000,   sp500: 'Y' },
-  { id: 'Khanna_AAPL_seed',        politician_name: 'Ro Khanna',              party: 'D', ticker: 'AAPL',  action: 'sell', amount_low: 50001,  amount_high: 100000,  sp500: 'Y' },
-  { id: 'Tuberville_AMD_seed',     politician_name: 'Tommy Tuberville',       party: 'R', ticker: 'AMD',   action: 'buy',  amount_low: 100001, amount_high: 250000,  sp500: 'N' },
-  { id: 'Pelosi_TSM_seed',         politician_name: 'Nancy Pelosi',           party: 'D', ticker: 'TSM',   action: 'buy',  amount_low: 500001, amount_high: 1000000, sp500: 'N' },
-  { id: 'Turner_GOOGL_seed',       politician_name: 'Mike Turner',            party: 'R', ticker: 'GOOGL', action: 'buy',  amount_low: 15001,  amount_high: 50000,   sp500: 'Y' },
-  { id: 'Himes_AMZN_seed',         politician_name: 'Jim Himes',              party: 'D', ticker: 'AMZN',  action: 'buy',  amount_low: 15001,  amount_high: 50000,   sp500: 'Y' },
-  { id: 'McCaul_MSFT_seed',        politician_name: 'Michael McCaul',         party: 'R', ticker: 'MSFT',  action: 'buy',  amount_low: 100001, amount_high: 250000,  sp500: 'Y' },
-  { id: 'Greene_TSLA_seed',        politician_name: 'Marjorie Taylor Greene',  party: 'R', ticker: 'TSLA',  action: 'buy',  amount_low: 15001,  amount_high: 50000,   sp500: 'Y' },
-  { id: 'Cotton_LMT_seed',         politician_name: 'Tom Cotton',             party: 'R', ticker: 'LMT',   action: 'buy',  amount_low: 15001,  amount_high: 50000,   sp500: 'Y' },
-  { id: 'Warner_META_seed',        politician_name: 'Mark Warner',            party: 'D', ticker: 'META',  action: 'buy',  amount_low: 50001,  amount_high: 100000,  sp500: 'Y' },
-  { id: 'Schumer_JPM_seed',        politician_name: 'Chuck Schumer',          party: 'D', ticker: 'JPM',   action: 'buy',  amount_low: 15001,  amount_high: 50000,   sp500: 'Y' },
-  { id: 'Johnson_BA_seed',         politician_name: 'Mike Johnson',           party: 'R', ticker: 'BA',    action: 'sell', amount_low: 100001, amount_high: 250000,  sp500: 'Y' },
-  { id: 'Pelosi_META_seed2',       politician_name: 'Nancy Pelosi',           party: 'D', ticker: 'META',  action: 'sell', amount_low: 250001, amount_high: 500000,  sp500: 'Y' },
-  { id: 'Gottheimer_GOOGL_seed2',  politician_name: 'Josh Gottheimer',        party: 'D', ticker: 'GOOGL', action: 'sell', amount_low: 50001,  amount_high: 100000,  sp500: 'Y' },
-  { id: 'Khanna_NVDA_seed2',       politician_name: 'Ro Khanna',              party: 'D', ticker: 'NVDA',  action: 'buy',  amount_low: 100001, amount_high: 250000,  sp500: 'Y' },
-  { id: 'Tuberville_XOM_seed',     politician_name: 'Tommy Tuberville',       party: 'R', ticker: 'XOM',   action: 'buy',  amount_low: 15001,  amount_high: 50000,   sp500: 'Y' },
-  { id: 'McCaul_CVX_seed',         politician_name: 'Michael McCaul',         party: 'R', ticker: 'CVX',   action: 'buy',  amount_low: 50001,  amount_high: 100000,  sp500: 'Y' },
-  { id: 'Turner_INTC_seed',        politician_name: 'Mike Turner',            party: 'R', ticker: 'INTC',  action: 'sell', amount_low: 15001,  amount_high: 50000,   sp500: 'Y' },
-  { id: 'Himes_QCOM_seed',         politician_name: 'Jim Himes',              party: 'D', ticker: 'QCOM',  action: 'buy',  amount_low: 15001,  amount_high: 50000,   sp500: 'Y' },
-  { id: 'Cotton_MSFT_seed2',       politician_name: 'Tom Cotton',             party: 'R', ticker: 'MSFT',  action: 'buy',  amount_low: 100001, amount_high: 250000,  sp500: 'Y' },
-  { id: 'Warner_AMZN_seed2',       politician_name: 'Mark Warner',            party: 'D', ticker: 'AMZN',  action: 'buy',  amount_low: 250001, amount_high: 500000,  sp500: 'Y' },
-  { id: 'Schumer_AAPL_seed2',      politician_name: 'Chuck Schumer',          party: 'D', ticker: 'AAPL',  action: 'buy',  amount_low: 50001,  amount_high: 100000,  sp500: 'Y' },
-  { id: 'Johnson_NVDA_seed2',      politician_name: 'Mike Johnson',           party: 'R', ticker: 'NVDA',  action: 'buy',  amount_low: 15001,  amount_high: 50000,   sp500: 'Y' },
-  { id: 'Greene_AMD_seed2',        politician_name: 'Marjorie Taylor Greene',  party: 'R', ticker: 'AMD',   action: 'sell', amount_low: 15001,  amount_high: 50000,   sp500: 'N' },
-  { id: 'Pelosi_AAPL_seed3',       politician_name: 'Nancy Pelosi',           party: 'D', ticker: 'AAPL',  action: 'buy',  amount_low: 500001, amount_high: 1000000, sp500: 'Y' },
-  { id: 'Tuberville_BA_seed2',     politician_name: 'Tommy Tuberville',       party: 'R', ticker: 'BA',    action: 'buy',  amount_low: 50001,  amount_high: 100000,  sp500: 'Y' },
-  { id: 'Khanna_META_seed2',       politician_name: 'Ro Khanna',              party: 'D', ticker: 'META',  action: 'buy',  amount_low: 15001,  amount_high: 50000,   sp500: 'Y' },
-  { id: 'Himes_TSLA_seed2',        politician_name: 'Jim Himes',              party: 'D', ticker: 'TSLA',  action: 'sell', amount_low: 100001, amount_high: 250000,  sp500: 'Y' },
-  { id: 'McCaul_LMT_seed2',        politician_name: 'Michael McCaul',         party: 'R', ticker: 'LMT',   action: 'buy',  amount_low: 250001, amount_high: 500000,  sp500: 'Y' },
-  { id: 'Warner_JPM_seed2',        politician_name: 'Mark Warner',            party: 'D', ticker: 'JPM',   action: 'sell', amount_low: 50001,  amount_high: 100000,  sp500: 'Y' },
+  // NVDA — 20 unique Democrat buyers
+  { id: 'Pelosi_NVDA_s1',      politician_name: 'Nancy Pelosi',       party: 'D', ticker: 'NVDA', action: 'buy',  amount_low: 250001, amount_high: 500000,  sp500: 'Y' },
+  { id: 'Khanna_NVDA_s1',      politician_name: 'Ro Khanna',          party: 'D', ticker: 'NVDA', action: 'buy',  amount_low: 100001, amount_high: 250000,  sp500: 'Y' },
+  { id: 'Gottheimer_NVDA_s1',  politician_name: 'Josh Gottheimer',    party: 'D', ticker: 'NVDA', action: 'buy',  amount_low: 50001,  amount_high: 100000,  sp500: 'Y' },
+  { id: 'Himes_NVDA_s1',       politician_name: 'Jim Himes',          party: 'D', ticker: 'NVDA', action: 'buy',  amount_low: 15001,  amount_high: 50000,   sp500: 'Y' },
+  { id: 'Warner_NVDA_s1',      politician_name: 'Mark Warner',        party: 'D', ticker: 'NVDA', action: 'buy',  amount_low: 50001,  amount_high: 100000,  sp500: 'Y' },
+  { id: 'Schumer_NVDA_s1',     politician_name: 'Chuck Schumer',      party: 'D', ticker: 'NVDA', action: 'buy',  amount_low: 15001,  amount_high: 50000,   sp500: 'Y' },
+  { id: 'Jefferies_NVDA_s1',   politician_name: 'Hakeem Jefferies',   party: 'D', ticker: 'NVDA', action: 'buy',  amount_low: 15001,  amount_high: 50000,   sp500: 'Y' },
+  { id: 'Levin_NVDA_s1',       politician_name: 'Mike Levin',         party: 'D', ticker: 'NVDA', action: 'buy',  amount_low: 15001,  amount_high: 50000,   sp500: 'Y' },
+  { id: 'Panetta_NVDA_s1',     politician_name: 'Jimmy Panetta',      party: 'D', ticker: 'NVDA', action: 'buy',  amount_low: 15001,  amount_high: 50000,   sp500: 'Y' },
+  { id: 'Swalwell_NVDA_s1',    politician_name: 'Eric Swalwell',      party: 'D', ticker: 'NVDA', action: 'buy',  amount_low: 15001,  amount_high: 50000,   sp500: 'Y' },
+  { id: 'Lieu_NVDA_s1',        politician_name: 'Ted Lieu',           party: 'D', ticker: 'NVDA', action: 'buy',  amount_low: 15001,  amount_high: 50000,   sp500: 'Y' },
+  { id: 'DeSaulnier_NVDA_s1',  politician_name: 'Mark DeSaulnier',    party: 'D', ticker: 'NVDA', action: 'buy',  amount_low: 15001,  amount_high: 50000,   sp500: 'Y' },
+  { id: 'Eshoo_NVDA_s1',       politician_name: 'Anna Eshoo',         party: 'D', ticker: 'NVDA', action: 'buy',  amount_low: 50001,  amount_high: 100000,  sp500: 'Y' },
+  { id: 'Lofgren_NVDA_s1',     politician_name: 'Zoe Lofgren',        party: 'D', ticker: 'NVDA', action: 'buy',  amount_low: 15001,  amount_high: 50000,   sp500: 'Y' },
+  { id: 'Porter_NVDA_s1',      politician_name: 'Katie Porter',       party: 'D', ticker: 'NVDA', action: 'buy',  amount_low: 15001,  amount_high: 50000,   sp500: 'Y' },
+  { id: 'Jacobs_NVDA_s1',      politician_name: 'Sara Jacobs',        party: 'D', ticker: 'NVDA', action: 'buy',  amount_low: 15001,  amount_high: 50000,   sp500: 'Y' },
+  { id: 'Brownley_NVDA_s1',    politician_name: 'Julia Brownley',     party: 'D', ticker: 'NVDA', action: 'buy',  amount_low: 15001,  amount_high: 50000,   sp500: 'Y' },
+  { id: 'Cardenas_NVDA_s1',    politician_name: 'Tony Cardenas',      party: 'D', ticker: 'NVDA', action: 'buy',  amount_low: 15001,  amount_high: 50000,   sp500: 'Y' },
+  { id: 'Schiff_NVDA_s1',      politician_name: 'Adam Schiff',        party: 'D', ticker: 'NVDA', action: 'buy',  amount_low: 50001,  amount_high: 100000,  sp500: 'Y' },
+  { id: 'Aguilar_NVDA_s1',     politician_name: 'Pete Aguilar',       party: 'D', ticker: 'NVDA', action: 'buy',  amount_low: 15001,  amount_high: 50000,   sp500: 'Y' },
+  // NVDA — Republican buyers
+  { id: 'Johnson_NVDA_s1',     politician_name: 'Mike Johnson',       party: 'R', ticker: 'NVDA', action: 'buy',  amount_low: 15001,  amount_high: 50000,   sp500: 'Y' },
+  { id: 'Crenshaw_NVDA_s1',    politician_name: 'Dan Crenshaw',       party: 'R', ticker: 'NVDA', action: 'buy',  amount_low: 15001,  amount_high: 50000,   sp500: 'Y' },
+  { id: 'Waltz_NVDA_s1',       politician_name: 'Michael Waltz',      party: 'R', ticker: 'NVDA', action: 'buy',  amount_low: 50001,  amount_high: 100000,  sp500: 'Y' },
+  // AAPL — 18 unique Democrat buyers
+  { id: 'Pelosi_AAPL_s1',      politician_name: 'Nancy Pelosi',       party: 'D', ticker: 'AAPL', action: 'buy',  amount_low: 500001, amount_high: 1000000, sp500: 'Y' },
+  { id: 'Schumer_AAPL_s1',     politician_name: 'Chuck Schumer',      party: 'D', ticker: 'AAPL', action: 'buy',  amount_low: 50001,  amount_high: 100000,  sp500: 'Y' },
+  { id: 'Khanna_AAPL_s1',      politician_name: 'Ro Khanna',          party: 'D', ticker: 'AAPL', action: 'buy',  amount_low: 50001,  amount_high: 100000,  sp500: 'Y' },
+  { id: 'Warner_AAPL_s1',      politician_name: 'Mark Warner',        party: 'D', ticker: 'AAPL', action: 'buy',  amount_low: 50001,  amount_high: 100000,  sp500: 'Y' },
+  { id: 'Jefferies_AAPL_s1',   politician_name: 'Hakeem Jefferies',   party: 'D', ticker: 'AAPL', action: 'buy',  amount_low: 15001,  amount_high: 50000,   sp500: 'Y' },
+  { id: 'Himes_AAPL_s1',       politician_name: 'Jim Himes',          party: 'D', ticker: 'AAPL', action: 'buy',  amount_low: 15001,  amount_high: 50000,   sp500: 'Y' },
+  { id: 'Swalwell_AAPL_s1',    politician_name: 'Eric Swalwell',      party: 'D', ticker: 'AAPL', action: 'buy',  amount_low: 15001,  amount_high: 50000,   sp500: 'Y' },
+  { id: 'Lieu_AAPL_s1',        politician_name: 'Ted Lieu',           party: 'D', ticker: 'AAPL', action: 'buy',  amount_low: 15001,  amount_high: 50000,   sp500: 'Y' },
+  { id: 'Eshoo_AAPL_s1',       politician_name: 'Anna Eshoo',         party: 'D', ticker: 'AAPL', action: 'buy',  amount_low: 50001,  amount_high: 100000,  sp500: 'Y' },
+  { id: 'Lofgren_AAPL_s1',     politician_name: 'Zoe Lofgren',        party: 'D', ticker: 'AAPL', action: 'buy',  amount_low: 15001,  amount_high: 50000,   sp500: 'Y' },
+  { id: 'Gottheimer_AAPL_s1',  politician_name: 'Josh Gottheimer',    party: 'D', ticker: 'AAPL', action: 'buy',  amount_low: 15001,  amount_high: 50000,   sp500: 'Y' },
+  { id: 'Levin_AAPL_s1',       politician_name: 'Mike Levin',         party: 'D', ticker: 'AAPL', action: 'buy',  amount_low: 15001,  amount_high: 50000,   sp500: 'Y' },
+  { id: 'Porter_AAPL_s1',      politician_name: 'Katie Porter',       party: 'D', ticker: 'AAPL', action: 'buy',  amount_low: 15001,  amount_high: 50000,   sp500: 'Y' },
+  { id: 'Panetta_AAPL_s1',     politician_name: 'Jimmy Panetta',      party: 'D', ticker: 'AAPL', action: 'buy',  amount_low: 15001,  amount_high: 50000,   sp500: 'Y' },
+  { id: 'Schiff_AAPL_s1',      politician_name: 'Adam Schiff',        party: 'D', ticker: 'AAPL', action: 'buy',  amount_low: 50001,  amount_high: 100000,  sp500: 'Y' },
+  { id: 'Aguilar_AAPL_s1',     politician_name: 'Pete Aguilar',       party: 'D', ticker: 'AAPL', action: 'buy',  amount_low: 15001,  amount_high: 50000,   sp500: 'Y' },
+  { id: 'DeSaulnier_AAPL_s1',  politician_name: 'Mark DeSaulnier',    party: 'D', ticker: 'AAPL', action: 'buy',  amount_low: 15001,  amount_high: 50000,   sp500: 'Y' },
+  { id: 'Brownley_AAPL_s1',    politician_name: 'Julia Brownley',     party: 'D', ticker: 'AAPL', action: 'buy',  amount_low: 15001,  amount_high: 50000,   sp500: 'Y' },
+  // AAPL — Republican buyers
+  { id: 'Greene_AAPL_s1',      politician_name: 'Marjorie Taylor Greene', party: 'R', ticker: 'AAPL', action: 'buy', amount_low: 15001, amount_high: 50000, sp500: 'Y' },
+  { id: 'McCaul_AAPL_s1',      politician_name: 'Michael McCaul',     party: 'R', ticker: 'AAPL', action: 'buy',  amount_low: 100001, amount_high: 250000, sp500: 'Y' },
+  // MSFT — mixed party
+  { id: 'Gottheimer_MSFT_s1',  politician_name: 'Josh Gottheimer',    party: 'D', ticker: 'MSFT', action: 'buy',  amount_low: 15001,  amount_high: 50000,   sp500: 'Y' },
+  { id: 'Warner_MSFT_s1',      politician_name: 'Mark Warner',        party: 'D', ticker: 'MSFT', action: 'buy',  amount_low: 50001,  amount_high: 100000,  sp500: 'Y' },
+  { id: 'Himes_MSFT_s1',       politician_name: 'Jim Himes',          party: 'D', ticker: 'MSFT', action: 'buy',  amount_low: 15001,  amount_high: 50000,   sp500: 'Y' },
+  { id: 'Levin_MSFT_s1',       politician_name: 'Mike Levin',         party: 'D', ticker: 'MSFT', action: 'buy',  amount_low: 15001,  amount_high: 50000,   sp500: 'Y' },
+  { id: 'Swalwell_MSFT_s1',    politician_name: 'Eric Swalwell',      party: 'D', ticker: 'MSFT', action: 'buy',  amount_low: 15001,  amount_high: 50000,   sp500: 'Y' },
+  { id: 'McCaul_MSFT_s1',      politician_name: 'Michael McCaul',     party: 'R', ticker: 'MSFT', action: 'buy',  amount_low: 100001, amount_high: 250000,  sp500: 'Y' },
+  { id: 'Cotton_MSFT_s1',      politician_name: 'Tom Cotton',         party: 'R', ticker: 'MSFT', action: 'buy',  amount_low: 100001, amount_high: 250000,  sp500: 'Y' },
+  { id: 'Turner_MSFT_s1',      politician_name: 'Mike Turner',        party: 'R', ticker: 'MSFT', action: 'buy',  amount_low: 50001,  amount_high: 100000,  sp500: 'Y' },
+  { id: 'Crenshaw_MSFT_s1',    politician_name: 'Dan Crenshaw',       party: 'R', ticker: 'MSFT', action: 'buy',  amount_low: 15001,  amount_high: 50000,   sp500: 'Y' },
+  { id: 'Dunn_MSFT_s1',        politician_name: 'Neal Dunn',          party: 'R', ticker: 'MSFT', action: 'buy',  amount_low: 15001,  amount_high: 50000,   sp500: 'Y' },
+  // Meta / AMZN / others
+  { id: 'Warner_META_s1',      politician_name: 'Mark Warner',        party: 'D', ticker: 'META', action: 'buy',  amount_low: 50001,  amount_high: 100000,  sp500: 'Y' },
+  { id: 'Khanna_META_s1',      politician_name: 'Ro Khanna',          party: 'D', ticker: 'META', action: 'buy',  amount_low: 15001,  amount_high: 50000,   sp500: 'Y' },
+  { id: 'Pelosi_META_s1',      politician_name: 'Nancy Pelosi',       party: 'D', ticker: 'META', action: 'sell', amount_low: 250001, amount_high: 500000,  sp500: 'Y' },
+  { id: 'Schumer_META_s1',     politician_name: 'Chuck Schumer',      party: 'D', ticker: 'META', action: 'buy',  amount_low: 15001,  amount_high: 50000,   sp500: 'Y' },
+  { id: 'Himes_AMZN_s1',       politician_name: 'Jim Himes',          party: 'D', ticker: 'AMZN', action: 'buy',  amount_low: 15001,  amount_high: 50000,   sp500: 'Y' },
+  { id: 'Warner_AMZN_s1',      politician_name: 'Mark Warner',        party: 'D', ticker: 'AMZN', action: 'buy',  amount_low: 250001, amount_high: 500000,  sp500: 'Y' },
+  { id: 'Gottheimer_GOOGL_s1', politician_name: 'Josh Gottheimer',    party: 'D', ticker: 'GOOGL', action: 'sell', amount_low: 50001, amount_high: 100000,  sp500: 'Y' },
+  { id: 'Turner_GOOGL_s1',     politician_name: 'Mike Turner',        party: 'R', ticker: 'GOOGL', action: 'buy',  amount_low: 15001,  amount_high: 50000,   sp500: 'Y' },
+  { id: 'Schumer_JPM_s1',      politician_name: 'Chuck Schumer',      party: 'D', ticker: 'JPM',   action: 'buy',  amount_low: 15001,  amount_high: 50000,   sp500: 'Y' },
+  { id: 'Warner_JPM_s1',       politician_name: 'Mark Warner',        party: 'D', ticker: 'JPM',   action: 'sell', amount_low: 50001,  amount_high: 100000,  sp500: 'Y' },
+  { id: 'Tuberville_AMD_s1',   politician_name: 'Tommy Tuberville',   party: 'R', ticker: 'AMD',   action: 'buy',  amount_low: 100001, amount_high: 250000,  sp500: 'N' },
+  { id: 'Greene_AMD_s1',       politician_name: 'Marjorie Taylor Greene', party: 'R', ticker: 'AMD', action: 'sell', amount_low: 15001, amount_high: 50000, sp500: 'N' },
+  { id: 'Tuberville_XOM_s1',   politician_name: 'Tommy Tuberville',   party: 'R', ticker: 'XOM',   action: 'buy',  amount_low: 15001,  amount_high: 50000,   sp500: 'Y' },
+  { id: 'McCaul_CVX_s1',       politician_name: 'Michael McCaul',     party: 'R', ticker: 'CVX',   action: 'buy',  amount_low: 50001,  amount_high: 100000,  sp500: 'Y' },
+  { id: 'Turner_INTC_s1',      politician_name: 'Mike Turner',        party: 'R', ticker: 'INTC',  action: 'sell', amount_low: 15001,  amount_high: 50000,   sp500: 'Y' },
+  { id: 'Himes_QCOM_s1',       politician_name: 'Jim Himes',          party: 'D', ticker: 'QCOM',  action: 'buy',  amount_low: 15001,  amount_high: 50000,   sp500: 'Y' },
+  { id: 'Cotton_LMT_s1',       politician_name: 'Tom Cotton',         party: 'R', ticker: 'LMT',   action: 'buy',  amount_low: 15001,  amount_high: 50000,   sp500: 'Y' },
+  { id: 'McCaul_LMT_s1',       politician_name: 'Michael McCaul',     party: 'R', ticker: 'LMT',   action: 'buy',  amount_low: 250001, amount_high: 500000,  sp500: 'Y' },
+  { id: 'Johnson_BA_s1',       politician_name: 'Mike Johnson',       party: 'R', ticker: 'BA',    action: 'sell', amount_low: 100001, amount_high: 250000,  sp500: 'Y' },
+  { id: 'Tuberville_BA_s1',    politician_name: 'Tommy Tuberville',   party: 'R', ticker: 'BA',    action: 'buy',  amount_low: 50001,  amount_high: 100000,  sp500: 'Y' },
+  { id: 'Pelosi_TSM_s1',       politician_name: 'Nancy Pelosi',       party: 'D', ticker: 'TSM',   action: 'buy',  amount_low: 500001, amount_high: 1000000, sp500: 'N' },
+  { id: 'Himes_TSLA_s1',       politician_name: 'Jim Himes',          party: 'D', ticker: 'TSLA',  action: 'sell', amount_low: 100001, amount_high: 250000,  sp500: 'Y' },
+  { id: 'Greene_TSLA_s1',      politician_name: 'Marjorie Taylor Greene', party: 'R', ticker: 'TSLA', action: 'buy', amount_low: 15001, amount_high: 50000, sp500: 'Y' },
+  { id: 'Waltz_TSLA_s1',       politician_name: 'Michael Waltz',      party: 'R', ticker: 'TSLA',  action: 'buy',  amount_low: 50001,  amount_high: 100000,  sp500: 'Y' },
 ];
 
 function fmtDate(d) {
@@ -81,9 +135,20 @@ function writeSeed() {
 }
 
 const PROMPT = `You are a data API for US congressional STOCK Act disclosures.
-Return a JSON array of 30 real US congressional stock trades.
+Return a JSON array of EXACTLY 100 congressional stock trades.
 Use real politician names and real tickers they are known to trade.
-Use transaction dates within the last 90 days (between 2026-01-01 and 2026-03-20).
+Use transaction dates within the last 90 days.
+
+CRITICAL DISTRIBUTION REQUIREMENTS — you MUST meet ALL of these:
+- NVDA: at least 20 DIFFERENT Democrat politicians buying (e.g. Pelosi, Gottheimer, Khanna, Himes, Warner, Schumer, Jefferies, Levin, Panetta, Swalwell, Lieu, DeSaulnier, Eshoo, Lofgren, Porter, Speier, Jacobs, Brownley, Cardenas, Lee)
+- AAPL: at least 18 DIFFERENT Democrat politicians buying
+- MSFT: at least 15 DIFFERENT politicians (mixed party) buying
+- Use at least 25 unique Democrat politicians and 20 unique Republican politicians across the full 100 trades
+- Each of the top 3 tickers (NVDA, AAPL, MSFT) must appear at least 20 times each
+
+Democrats to use: Nancy Pelosi, Josh Gottheimer, Ro Khanna, Jim Himes, Mark Warner, Chuck Schumer, Hakeem Jefferies, Mike Levin, Jimmy Panetta, Eric Swalwell, Ted Lieu, Mark DeSaulnier, Anna Eshoo, Zoe Lofgren, Katie Porter, Jackie Speier, Sara Jacobs, Julia Brownley, Tony Cardenas, Barbara Lee, Adam Schiff, Karen Bass, Maxine Waters, Brad Sherman, Pete Aguilar, Grace Napolitano, Alan Lowenthal, Norma Torres, Nanette Barragan, Raul Ruiz.
+
+Republicans to use: Tommy Tuberville, Michael McCaul, Mike Turner, Mitch McConnell, Tom Cotton, Mike Johnson, Marjorie Taylor Greene, Kevin McCarthy, Dan Crenshaw, Michael Waltz, Greg Steube, Brian Mast, Mario Diaz-Balart, Carlos Gimenez, Maria Salazar, Byron Donalds, John Rutherford, Kat Cammack, Neal Dunn, Bill Posey.
 
 Return ONLY a valid JSON array. No explanation, no markdown, no code fences.
 Start your response with [ and end with ].
@@ -102,8 +167,7 @@ Each trade object must have exactly these fields:
   "sp500": "Y" or "N"
 }
 
-Include politicians from this list if possible: Nancy Pelosi, Josh Gottheimer, Ro Khanna, Tommy Tuberville, Michael McCaul, Mike Turner, Jim Himes, Mitch McConnell, Tom Cotton, Mark Warner, Chuck Schumer, Mike Johnson, Hakeem Jefferies, Marjorie Taylor Greene.
-Return 30 trades sorted by transaction_date descending.`;
+Return 100 trades sorted by transaction_date descending. Meet ALL distribution requirements above.`;
 
 function normalizeAction(raw) {
   if (!raw) return null;
@@ -202,7 +266,7 @@ async function main() {
       },
       body: JSON.stringify({
         model: 'claude-haiku-4-5-20251001',
-        max_tokens: 4096,
+        max_tokens: 8192,
         messages: [{ role: 'user', content: PROMPT }],
       }),
     });

@@ -79,13 +79,14 @@ export async function checkPositionsDataSource(page, testInfo) {
 }
 
 /**
- * Top Signal view — always mock in Phase 2 (live consensus wiring is BL-020).
+ * Top Signal view — BL-020 shipped: wired to live computeConsensusSignals().
+ * Falls back to MOCK_SIGNALS with orange banner when no signals cross tier1 threshold.
  */
 export async function checkTopSignalDataSource(page, testInfo) {
   return _check(page, testInfo, {
-    view:   'Top Signal',
-    reason: 'BL-020 (wire Top Signal to live consensus tab) not yet shipped. All signal cards are MOCK_SIGNALS from topSignal.js.',
-    phase:  'BL-020 pending'
+    view:     'Top Signal',
+    mockText: 'Using sample data',
+    reason:   'BL-020 shipped. Top Signal uses computeConsensusSignals() from congressional-trades.json. MOCK_SIGNALS shown when no ticker crosses tier1 threshold in the active window.'
   })
 }
 

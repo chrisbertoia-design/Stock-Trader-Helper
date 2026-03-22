@@ -41,7 +41,7 @@ export default defineConfig({
         globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
         runtimeCaching: [
           {
-            urlPattern: /^https:\/\/house-stock-watcher-data/,
+            urlPattern: /congressional-trades\.json$/,
             handler: 'StaleWhileRevalidate',
             options: { cacheName: 'politician-trades', expiration: { maxAgeSeconds: 3600 } }
           }

@@ -1,30 +1,24 @@
 /**
- * House Stock Watcher API
- * Source: https://housestockwatcher.com
- * Data: https://house-stock-watcher-data.s3.us-west-2.amazonaws.com/data/all_transactions.json
+ * Congressional trade data — loaded from pre-built static JSON.
+ *
+ * Source: public/congressional-trades.json
+ * Generated at build time by scripts/generate-trades.js (Anthropic API, with seed fallback).
+ * Refreshed every deploy. No S3/CORS issues — served as a static asset.
  *
  * Performance notes:
- *   - all_transactions.json is 30-50MB / 10,000+ records going back to 2012.
- *   - We trim to the last DATA_WINDOW_DAYS before normalizing to avoid
- *     blocking the main thread with a massive synchronous loop.
- *   - raw_json is NOT stored in normalized records (expensive & unnecessary in RAM).
+ *   - Data is pre-normalized at build time — no heavy parsing in the browser.
+ *   - 1-hour localStorage cache avoids repeat fetches within a session.
  *   - A single in-flight promise is shared — concurrent callers get the same fetch.
  *   - 15s AbortController timeout prevents hung connections from blocking the UI.
- *   - localStorage cache stores only normalized fields; stays well under 5MB limit.
  */
 
 import { debug, info, warn, error } from '../services/logger.js'
 
-const CAT             = 'HSW_API'
-// In dev, Vite proxies /api/hsw → S3 (avoids CORS on localhost).
-// In production, fetch directly from S3.
-const URL = import.meta.env.DEV
-  ? '/api/hsw/all_transactions.json'
-  : 'https://house-stock-watcher-data.s3.us-west-2.amazonaws.com/data/all_transactions.json'
-const CACHE_KEY       = 'hsw_cache'
-const CACHE_TTL       = 60 * 60 * 1000   // 1 hour
-const FETCH_TIMEOUT   = 15_000            // 15s — abort if no response
-const DATA_WINDOW_DAYS = 90               // only keep last 90 days (14d consensus + 30d feed + margin)
+const CAT           = 'HSW_API'
+const DATA_URL      = `${import.meta.env.BASE_URL}congressional-trades.json`
+const CACHE_KEY     = 'hsw_cache'
+const CACHE_TTL     = 60 * 60 * 1000   // 1 hour
+const FETCH_TIMEOUT = 15_000            // 15s — abort if no response
 
 let _fetchInFlight = null   // dedup: concurrent callers share one request
 
@@ -40,13 +34,12 @@ export async function fetchAllTransactions({ forceRefresh = false } = {}) {
   }
 
   // Dedup: if a fetch is already in progress, return the same promise
-  // Prevents two 50MB downloads + JSON parses running simultaneously
   if (_fetchInFlight) {
     debug(CAT, 'HSW fetch already in flight — joining existing request')
     return _fetchInFlight
   }
 
-  _fetchInFlight = _fetchFromNetwork(forceRefresh).finally(() => { _fetchInFlight = null })
+  _fetchInFlight = _fetchFromNetwork().finally(() => { _fetchInFlight = null })
   return _fetchInFlight
 }
 
@@ -126,43 +119,42 @@ export function computeConsensusSignals(transactions, { config, partyRoster }) {
 
 // ─── Network fetch ────────────────────────────────────────────────────────────
 
-async function _fetchFromNetwork(forceRefresh) {
-  info(CAT, `Fetching HSW (last ${DATA_WINDOW_DAYS} days only)`)
+async function _fetchFromNetwork() {
+  info(CAT, `Fetching congressional trades from ${DATA_URL}`)
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT)
 
   try {
-    const res = await fetch(URL, {
-      cache:  forceRefresh ? 'reload' : 'default',
-      signal: controller.signal
-    })
+    const res = await fetch(DATA_URL, { signal: controller.signal })
     clearTimeout(timer)
 
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
 
-    // Parse the full JSON — unavoidably synchronous, but we immediately
-    // discard records older than DATA_WINDOW_DAYS to minimize work
-    const raw = await res.json()
+    const payload = await res.json()
 
-    if (!Array.isArray(raw)) throw new Error('HSW response is not an array')
+    // Format: { generated_at: string, trades: Array }
+    const raw = Array.isArray(payload) ? payload : (payload.trades ?? [])
 
-    info(CAT, `HSW raw: ${raw.length} records — trimming to ${DATA_WINDOW_DAYS} days`)
-    const cutoffMs = Date.now() - DATA_WINDOW_DAYS * 86_400_000
-    const recent   = raw.filter(t => _parseDate(t.transaction_date) > cutoffMs)
+    if (!Array.isArray(raw) || raw.length === 0) throw new Error('congressional-trades.json returned empty array')
 
-    info(CAT, `Trimmed to ${recent.length} recent records, normalizing...`)
-    const normalized = recent.map(_normalizeTransaction).filter(Boolean)
+    info(CAT, `Loaded ${raw.length} trades (generated ${payload.generated_at ?? 'unknown'})`)
+
+    // Add transaction_ts (unix ms) from transaction_date string
+    const normalized = raw.map(t => ({
+      ...t,
+      transaction_ts: _parseDate(t.transaction_date)
+    })).filter(t => t.transaction_ts > 0)
 
     _writeCache(normalized)
-    info(CAT, `HSW ready — ${normalized.length} transactions cached`)
+    info(CAT, `Trades ready — ${normalized.length} transactions cached`)
     return normalized
 
   } catch (err) {
     clearTimeout(timer)
     const msg = err.name === 'AbortError'
-      ? `HSW fetch timed out after ${FETCH_TIMEOUT / 1000}s — check network`
+      ? `Trades fetch timed out after ${FETCH_TIMEOUT / 1000}s`
       : err.message
-    error(CAT, 'HSW fetch failed', msg)
+    error(CAT, 'Trades fetch failed', msg)
 
     const stale = _readCache({ ignoreExpiry: true })
     if (stale) {
@@ -173,60 +165,7 @@ async function _fetchFromNetwork(forceRefresh) {
   }
 }
 
-// ─── Normalization ────────────────────────────────────────────────────────────
-// NOTE: raw_json intentionally omitted — storing JSON.stringify of 1000+ records
-// in RAM and localStorage is expensive and unnecessary for feed rendering.
-
-function _normalizeTransaction(raw) {
-  try {
-    const action = (raw.type || raw.transaction_type || '').toLowerCase()
-    if (!raw.ticker || raw.ticker === '--') return null
-    if (!action.includes('purchase') && !action.includes('sale')) return null
-
-    return {
-      id:               raw.transaction_id || `${raw.representative}_${raw.transaction_date}_${raw.ticker}`,
-      politician_name:  raw.representative || raw.name || 'Unknown',
-      party:            _inferParty(raw),
-      ticker:           raw.ticker.toUpperCase().trim(),
-      action:           action.includes('purchase') ? 'buy' : 'sell',
-      amount_low:       _parseAmountLow(raw.amount),
-      amount_high:      _parseAmountHigh(raw.amount),
-      transaction_date: raw.transaction_date || '',
-      disclosed_date:   raw.disclosure_date  || raw.disclosure_year || '',
-      transaction_ts:   _parseDate(raw.transaction_date),
-      sp500:            'N'
-    }
-  } catch (e) {
-    warn(CAT, 'Failed to normalize transaction', e.message)
-    return null
-  }
-}
-
-function _inferParty(raw) {
-  const partyField = (raw.party || '').trim().toLowerCase()
-  if (partyField === 'd') return 'D'
-  if (partyField === 'r') return 'R'
-  if (partyField === 'democrat' || partyField === 'democratic') return 'D'
-  if (partyField === 'republican') return 'R'
-
-  const d = (raw.party || raw.representative || '').toLowerCase()
-  if (d.includes('(d)') || d.includes('democrat'))   return 'D'
-  if (d.includes('(r)') || d.includes('republican')) return 'R'
-  return 'U'
-}
-
-const AMOUNT_MAP = {
-  '$1,001 - $15,000':     [1001,    15000],
-  '$15,001 - $50,000':    [15001,   50000],
-  '$50,001 - $100,000':   [50001,  100000],
-  '$100,001 - $250,000':  [100001, 250000],
-  '$250,001 - $500,000':  [250001, 500000],
-  '$500,001 - $1,000,000':[500001, 1000000],
-  'Over $1,000,000':      [1000001, 5000000]
-}
-
-function _parseAmountLow(str)  { return AMOUNT_MAP[str]?.[0] ?? 1001 }
-function _parseAmountHigh(str) { return AMOUNT_MAP[str]?.[1] ?? 15000 }
+// ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function _parseDate(str) {
   if (!str) return 0

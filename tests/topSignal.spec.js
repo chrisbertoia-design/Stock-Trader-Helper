@@ -6,42 +6,83 @@ import { test, expect } from '@playwright/test'
 import { setupAuth, goHome } from './helpers/auth.js'
 import { checkTopSignalDataSource } from './helpers/dataCheck.js'
 
-// Shared mock payload used by route.fulfill() tests.
-// Fulfilling with real-shaped data lets the view compute live signals
-// and proves the mock-data fallback path is NOT triggered.
+// ─── Deterministic mock payload for all topSignal tests ──────────────────────
 //
-// Field names MUST match what _normalizeRecord() reads from raw records:
-//   politician_name, action ('buy'|'sell'), amount_low, amount_high, party, ticker, transaction_date
-// (NOT the HSW raw-shape fields like representative/type/amount)
+// Tests need a predictable, stable set of signals. Real congressional-trades.json
+// changes over time and only produces signals when enough traders cross tier1
+// thresholds within the active window. We use route.fulfill() in beforeEach so
+// every test gets exactly 7 signals with the correct party/action distribution.
 //
-// To generate ≥1 real signal: need pct_of_party >= tier1 (8% default).
-// PARTY_ROSTER.D = 213 → need ≥ ceil(213 * 0.08) = 18 distinct D traders buying NVDA.
-// We supply 18 unique politician names all buying NVDA in the last 30 days.
-const _DEMO_NAMES = [
-  'Rep A', 'Rep B', 'Rep C', 'Rep D', 'Rep E', 'Rep F',
-  'Rep G', 'Rep H', 'Rep I', 'Rep J', 'Rep K', 'Rep L',
-  'Rep M', 'Rep N', 'Rep O', 'Rep P', 'Rep Q', 'Rep R',
+// 7 tickers designed for filter tests:
+//   D-majority buys (partyD > partyR): NVDA, AAPL, MSFT, META  → 4 cards
+//   R-majority buys (partyR > partyD): AMZN, GOOGL              → 2 cards
+//   D-majority sells (partyD > partyR, sellCount > buyCount): WMT → 1 card
+//
+// Tier1 threshold: 8% of 213 Dems = 17.04 → need ≥18 unique D traders
+//                 8% of 222 Reps = 17.76 → need ≥18 unique R traders
+//
+// MOCK_TRADES_PAYLOAD (single-ticker, 18 D buyers) is kept for the
+// [MOCK BANNER ABSENT] test which overrides beforeEach's route via LIFO routing.
+
+const _RECENT = new Date(Date.now() - 20 * 86400000).toISOString().slice(0, 10)
+
+const _D_NAMES = [
+  'D_Rep_1','D_Rep_2','D_Rep_3','D_Rep_4','D_Rep_5','D_Rep_6',
+  'D_Rep_7','D_Rep_8','D_Rep_9','D_Rep_10','D_Rep_11','D_Rep_12',
+  'D_Rep_13','D_Rep_14','D_Rep_15','D_Rep_16','D_Rep_17','D_Rep_18',
 ]
-const _RECENT_DATE = new Date(Date.now() - 20 * 86400000).toISOString().slice(0, 10)
-const MOCK_TRADES_PAYLOAD = {
-  generated_at: new Date().toISOString(),
-  trades: _DEMO_NAMES.map((name, i) => ({
-    id:               `mock-signal-${i}`,
+const _R_NAMES = [
+  'R_Rep_1','R_Rep_2','R_Rep_3','R_Rep_4','R_Rep_5','R_Rep_6',
+  'R_Rep_7','R_Rep_8','R_Rep_9','R_Rep_10','R_Rep_11','R_Rep_12',
+  'R_Rep_13','R_Rep_14','R_Rep_15','R_Rep_16','R_Rep_17','R_Rep_18',
+]
+
+function _makeTrades(ticker, party, action, names) {
+  return names.map((name, i) => ({
+    id:               `${ticker}-${party}-${action}-${i}`,
     politician_name:  name,
-    party:            'D',
-    ticker:           'NVDA',
-    action:           'buy',
+    party,
+    ticker,
+    action,
     amount_low:       15001,
     amount_high:      50000,
-    transaction_date: _RECENT_DATE,
-    disclosed_date:   _RECENT_DATE,
+    transaction_date: _RECENT,
+    disclosed_date:   _RECENT,
     sp500:            'Y',
-  })),
+  }))
+}
+
+// 7-ticker payload — produces exactly 7 signal cards across all filter states
+const MOCK_7_PAYLOAD = {
+  generated_at: new Date().toISOString(),
+  trades: [
+    ..._makeTrades('NVDA', 'D', 'buy',  _D_NAMES),  // D-majority buy
+    ..._makeTrades('AAPL', 'D', 'buy',  _D_NAMES),  // D-majority buy
+    ..._makeTrades('MSFT', 'D', 'buy',  _D_NAMES),  // D-majority buy
+    ..._makeTrades('META', 'D', 'buy',  _D_NAMES),  // D-majority buy
+    ..._makeTrades('AMZN', 'R', 'buy',  _R_NAMES),  // R-majority buy
+    ..._makeTrades('GOOGL','R', 'buy',  _R_NAMES),  // R-majority buy
+    ..._makeTrades('WMT',  'D', 'sell', _D_NAMES),  // D-majority sell
+  ],
+}
+
+// Single-ticker payload for [MOCK BANNER ABSENT] test — overrides beforeEach route via LIFO.
+// 18 D buyers of NVDA → 1 real signal → mock-banner must be absent.
+const MOCK_TRADES_PAYLOAD = {
+  generated_at: new Date().toISOString(),
+  trades: _makeTrades('NVDA', 'D', 'buy', _D_NAMES),
 }
 
 test.beforeEach(async ({ page }) => {
   await setupAuth(page)
+  // Intercept congressional-trades.json with deterministic 7-ticker mock data.
+  // Must be registered before goHome so it's in place when Top Signal renders.
+  await page.route('**/congressional-trades.json', route =>
+    route.fulfill({ contentType: 'application/json', body: JSON.stringify(MOCK_7_PAYLOAD) })
+  )
   await goHome(page)
+  // Clear any stale cache so the route.fulfill() mock is always used.
+  await page.evaluate(() => localStorage.removeItem('congressional_cache'))
   await page.locator('.home-card').nth(1).click()
   await page.locator('#party-filters').waitFor({ timeout: 5000 })
 })
