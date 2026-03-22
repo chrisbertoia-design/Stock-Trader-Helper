@@ -191,7 +191,7 @@ function _wireUpload(container, signal) {
             info(CAT, `Wrote ${rows.length} positions to Sheets my_positions tab`)
           } catch (sheetsErr) {
             warn(CAT, `Sheets write failed (${sheetsErr.message}) — positions updated in-memory only`)
-            showToast('Positions loaded but Sheets save failed')
+            showToast('Sheets save failed — positions shown but will reset on refresh', 'error')
           }
         }
 

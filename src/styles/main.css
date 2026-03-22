@@ -322,6 +322,8 @@ body {
   pointer-events: auto;
   animation: toast-in var(--mid) var(--ease) forwards;
 }
+.toast.toast-error   { background: #3a1a1a; border-color: var(--sell); color: #ff8a8a; }
+.toast.toast-success { background: #1a2f1a; border-color: var(--buy); }
 .toast.leaving { animation: toast-out var(--fast) var(--ease) forwards; }
 @keyframes toast-in  { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
 @keyframes toast-out { from { opacity:1; } to { opacity:0; transform:translateY(-4px); } }
