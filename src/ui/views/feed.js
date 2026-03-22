@@ -6,6 +6,7 @@
 
 import { fetchAllTransactions, filterByWatchlist } from '../../api/congressional.js'
 import { readTab } from '../../api/googleSheets.js'
+import { get as configGet } from '../../stores/config.js'
 import { debug, warn } from '../../services/logger.js'
 import { showToast } from '../components/toast.js'
 import { WATCHLIST } from '../../data/watchlist.js'
@@ -198,11 +199,11 @@ export async function renderFeed(container, signal, { forceRefresh = false } = {
       warn(CAT, `Watchlist load failed: ${wlErr.message} — using seed watchlist`)
     }
 
-    // Filter to watchlist members — use 90-day window to match cache.
+    // Filter to watchlist members — use 180-day window to match cache.
     // Congressional disclosures lag 30–45 days after the trade, so a
-    // 30-day transaction_date filter silently drops most recent disclosures.
-    const filteredTrades = filterByWatchlist(allTransactions, watchlistNames, { daysBack: 90 })
-    debug(CAT, `Filtered to ${filteredTrades.length} trades in last 90 days`)
+    // narrow filter silently drops most recent disclosures.
+    const filteredTrades = filterByWatchlist(allTransactions, watchlistNames, { daysBack: 180 })
+    debug(CAT, `Filtered to ${filteredTrades.length} trades in last 180 days`)
 
     if (filteredTrades.length === 0) {
       warn(CAT, 'No trades found for watchlist in past 30 days — using mock')
@@ -230,9 +231,13 @@ export async function renderFeed(container, signal, { forceRefresh = false } = {
   _showMorePending = false
 
   const tradeCount = visibleTrades.length
+  const lastFetchStr = configGet('congressional_last_fetch', '')
+  const lastUpdatedLabel = lastFetchStr
+    ? ` · updated ${_formatAge(Date.now() - new Date(lastFetchStr).getTime())} ago`
+    : ''
   const subtitle = usingMock
     ? 'Sample data — connect Google to load live trades'
-    : `${tradeCount} disclosure${tradeCount !== 1 ? 's' : ''} · last 90 days`
+    : `${tradeCount} disclosure${tradeCount !== 1 ? 's' : ''} · last 6 months${lastUpdatedLabel}`
 
   const refreshBtn = `<button id="feed-refresh-btn" class="btn btn-ghost" style="font-size:11px;padding:2px 10px;margin-top:var(--s2);">↺ Refresh</button>`
 
@@ -393,13 +398,60 @@ function _attachHandlersForBatch(container, trades, decisions, signal) {
   })
 }
 
+function _formatAge(ms) {
+  const h = ms / 3_600_000
+  if (h < 1) return '< 1h'
+  if (h < 24) return `${Math.floor(h)}h`
+  const d = Math.floor(h / 24)
+  return `${d} day${d !== 1 ? 's' : ''}`
+}
+
+function _showRefreshModal(container, signal, age) {
+  const existing = document.getElementById('feed-refresh-modal')
+  if (existing) existing.remove()
+
+  const modal = document.createElement('div')
+  modal.id = 'feed-refresh-modal'
+  modal.style.cssText = 'position:fixed;inset:0;z-index:100;background:rgba(0,0,0,0.6);display:flex;align-items:flex-end;justify-content:center;padding:var(--s4);'
+  modal.innerHTML = `
+    <div style="background:var(--bg-raised);border:1px solid var(--border-soft);border-radius:var(--r3);padding:var(--s5);width:100%;max-width:420px;">
+      <div style="font-size:15px;font-weight:600;color:var(--text-primary);margin-bottom:var(--s2);">Data refreshed ${age} ago</div>
+      <div style="font-size:13px;color:var(--text-secondary);margin-bottom:var(--s5);line-height:1.5;">Fetching again uses your network quota. Refresh anyway?</div>
+      <div style="display:flex;gap:var(--s3);">
+        <button id="feed-modal-cancel" class="btn btn-ghost" style="flex:1;">Cancel</button>
+        <button id="feed-modal-confirm" class="btn" style="flex:1;background:var(--accent);color:#fff;border:none;">Yes, Refresh</button>
+      </div>
+    </div>
+  `
+  document.body.appendChild(modal)
+
+  const opts = signal ? { signal } : {}
+  const dismiss = () => modal.remove()
+
+  modal.addEventListener('click', (e) => { if (e.target === modal) dismiss() }, opts)
+  modal.querySelector('#feed-modal-cancel').addEventListener('click', dismiss, opts)
+  modal.querySelector('#feed-modal-confirm').addEventListener('click', () => {
+    dismiss()
+    const btn = container.querySelector('#feed-refresh-btn')
+    if (btn) { btn.textContent = '↺ Refreshing…'; btn.disabled = true }
+    renderFeed(container, signal, { forceRefresh: true })
+  }, opts)
+  signal?.addEventListener('abort', dismiss, { once: true })
+}
+
 function _attachRefreshHandler(container, signal) {
   const btn = container.querySelector('#feed-refresh-btn')
   if (!btn) return
   btn.addEventListener('click', () => {
-    btn.textContent = '↺ Refreshing…'
-    btn.disabled = true
-    renderFeed(container, signal, { forceRefresh: true })
+    const lastFetch = configGet('congressional_last_fetch', '')
+    const ageMs = lastFetch ? Date.now() - new Date(lastFetch).getTime() : Infinity
+    if (ageMs < 86_400_000) {
+      _showRefreshModal(container, signal, _formatAge(ageMs))
+    } else {
+      btn.textContent = '↺ Refreshing…'
+      btn.disabled = true
+      renderFeed(container, signal, { forceRefresh: true })
+    }
   }, signal ? { signal } : {})
 }
 

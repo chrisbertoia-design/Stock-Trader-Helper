@@ -144,6 +144,15 @@ These are the highest-impact rules — violations have caused production bugs or
 | my_allocations | ticker, target_pct, current_pct, notes |
 | my_positions | ticker, quantity, avg_cost, mkt_value, gain_loss, gain_loss_pct, last_csv_upload, source |
 
+**Config keys written by `congressional.js` after every successful network fetch:**
+| Key | Purpose |
+|-----|---------|
+| `congressional_last_fetch` | ISO timestamp of when the fetch completed |
+| `congressional_last_response_date` | Most recent `transaction_date` in the dataset (newest trade) |
+| `congressional_last_record_count` | Total records returned (string) |
+
+Feed view reads `congressional_last_fetch` to: (a) display "updated Xh ago" in the subtitle, and (b) gate the ↺ Refresh button with a confirmation modal when age < 24h.
+
 ## Role Shifting
 At the start of new features, threads of thought, or when the task nature changes, ask: **"What role should I play for this?"**
 
@@ -369,11 +378,9 @@ Structured logger in `src/services/logger.js`. Levels: DEBUG, INFO, WARN, ERROR.
 |----|-------|----------|-------|
 | BL-007 | `readTab` unbounded A:ZZ range → use schema column bounds | P2 | Reduces Sheets read latency |
 | BL-008 | Skeleton/loading states for all views | P2 | Positions already has skeleton |
-| BL-009 | localStorage cache for HSW → IndexedDB (quota + sync JSON.parse) | P2 | Prevents silent cache failures |
 | BL-010 | PARTY_ROSTER config-driven (party_roster_d/r keys in config tab) | P2 | |
 | BL-011 | Positions stale-data warning when last_csv_upload > N days | P2 | ✅ Shipped as BL-026 |
 | BL-012 | Decisions history view | P2 | |
-| BL-015 | Persist HSW disclosures to `disclosures` tab | P3 | |
 | BL-016 | Remove unused chart.js or implement portfolio chart | P3 | |
 | BL-017 | Schwab CSV preview before commit | Backlog | |
 | BL-018 | PWA installable on mobile (GitHub Pages, OAuth requires https origin) | Backlog | |

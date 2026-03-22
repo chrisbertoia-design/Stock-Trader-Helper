@@ -9,10 +9,12 @@
  *   - 10s AbortController timeout as a safety net.
  *   - 1-hour localStorage cache to avoid repeated fetches.
  *   - In-flight dedup: concurrent callers share one promise.
- *   - Normalized output shape is identical to houseStockWatcher.js so feed.js needs no changes.
+ *   - After each successful network fetch, writes 3 metadata keys to config:
+ *     congressional_last_fetch, congressional_last_response_date, congressional_last_record_count.
  */
 
 import { debug, info, warn, error } from '../services/logger.js'
+import { set as setConfig } from '../stores/config.js'
 
 function _esc(str) {
   return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
@@ -23,7 +25,7 @@ const CACHE_KEY        = 'congressional_cache'
 const CACHE_TTL        = 60 * 60 * 1000   // 1 hour
 const FETCH_TIMEOUT    = 10_000            // 10s — static file fetch
 const WORKER_TIMEOUT   = 30_000            // 30s — parser worker (large payload)
-const DATA_WINDOW_DAYS = 90               // trim to last 90 days
+const DATA_WINDOW_DAYS = 180              // trim to last 6 months
 
 const TRADES_URL = import.meta.env.BASE_URL + 'congressional-trades.json'
 
@@ -188,6 +190,21 @@ async function _fetchFromNetwork() {
 
     info(CAT, `Congressional trades ready — ${normalized.length} records cached`)
     _writeCache(normalized)
+
+    // Persist fetch metadata to config (haiku retrieval response log)
+    try {
+      const mostRecentDate = normalized.reduce((latest, t) =>
+        t.transaction_date > latest ? t.transaction_date : latest, '')
+      await Promise.all([
+        setConfig('congressional_last_fetch',         new Date().toISOString()),
+        setConfig('congressional_last_response_date', mostRecentDate),
+        setConfig('congressional_last_record_count',  String(normalized.length)),
+      ])
+      debug(CAT, 'Fetch metadata written to config', { mostRecentDate, count: normalized.length })
+    } catch (cfgErr) {
+      warn(CAT, 'Config metadata write failed — data still cached', cfgErr.message)
+    }
+
     return normalized
 
   } catch (err) {
