@@ -86,9 +86,9 @@ export async function renderHome(container, signal) {
       }
     }
 
-    // Top Signal: compute from ALL of Congress (14-day window)
+    // Top Signal: compute from ALL of Congress (30-day window matches realistic threshold crossings)
     const rawSignals = computeConsensusSignals(trades, {
-      config: { ...getConfig(), consensus_window_days: 14 },
+      config: { ...getConfig(), consensus_window_days: 30 },
       partyRoster: PARTY_ROSTER,
     })
     if (rawSignals.length > 0) {
@@ -112,7 +112,7 @@ export async function renderHome(container, signal) {
           ticker: top.ticker,
           tier:   top.tier,
           flags,
-          stat:   `${Math.round(top.maxPct * 100)}% ${pctLabel} buying · last 14 days`,
+          stat:   `${Math.round(top.maxPct * 100)}% ${pctLabel} buying · last 30 days`,
         }
       }
     }

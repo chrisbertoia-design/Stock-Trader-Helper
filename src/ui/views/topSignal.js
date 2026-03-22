@@ -237,11 +237,15 @@ async function _loadSignals(container, signal) {
     const cutoff = Date.now() - windowDays * 86_400_000
     const windowTx = allTx.filter(tx => tx.transaction_ts >= cutoff)
 
-    // If computation yields no results, fall back to MOCK_SIGNALS silently.
-    // Banner is reserved for fetch failures only.
     _liveSignals = _deriveCardSignals(rawSignals, windowTx)
-    if (_liveSignals.length === 0) _liveSignals = MOCK_SIGNALS
-    _usingMock = false
+    // If real computation yields zero signals (no ticker crossed the tier1 threshold),
+    // show mock with a banner so users know it's sample data — not silently fake.
+    if (_liveSignals.length === 0) {
+      _liveSignals = MOCK_SIGNALS
+      _usingMock = true
+    } else {
+      _usingMock = false
+    }
 
   } catch (_err) {
     _liveSignals = MOCK_SIGNALS
@@ -377,7 +381,7 @@ function _render(container, signal) {
 
 function _applyFilter(signals, partyFilter, actionFilter) {
   let out = signals
-  if (partyFilter === 'D')    out = out.filter(s => s.partyD >= s.partyR)
+  if (partyFilter === 'D')    out = out.filter(s => s.partyD > s.partyR)
   if (partyFilter === 'R')    out = out.filter(s => s.partyR > s.partyD)
   if (actionFilter === 'buy') out = out.filter(s => s.buyCount > s.sellCount)
   if (actionFilter === 'sell') out = out.filter(s => s.sellCount > s.buyCount)
