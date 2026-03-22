@@ -5,7 +5,7 @@
  */
 
 import { fetchAllTransactions, computeConsensusSignals } from '../../api/congressional.js'
-import { getConfig } from '../../stores/config.js'
+import { getConfig, get as configGet } from '../../stores/config.js'
 
 const PARTY_ROSTER = { D: 213, R: 222 }
 
@@ -210,7 +210,7 @@ function _renderSkeleton() {
 
 // ─── Async load + compute ─────────────────────────────────────────────────────
 
-async function _loadSignals(container, signal) {
+async function _loadSignals(container, signal, { forceRefresh = false } = {}) {
   if (signal?.aborted) return
 
   // Show skeleton while loading
@@ -218,7 +218,7 @@ async function _loadSignals(container, signal) {
 
   try {
     // Load all congressional transactions
-    const allTx = await fetchAllTransactions({ forceRefresh: false })
+    const allTx = await fetchAllTransactions({ forceRefresh })
 
     if (signal?.aborted) return
 
@@ -289,9 +289,67 @@ function _filterBtn(key, active, label, dataAttr) {
 
 // ─── Sync render (called after data is ready) ─────────────────────────────────
 
+function _formatAge(ms) {
+  const h = ms / 3_600_000
+  if (h < 1) return '< 1h'
+  if (h < 24) return `${Math.floor(h)}h`
+  const d = Math.floor(h / 24)
+  return `${d} day${d !== 1 ? 's' : ''}`
+}
+
+function _showRefreshModal(container, signal, age) {
+  const existing = document.getElementById('signal-refresh-modal')
+  if (existing) existing.remove()
+
+  const modal = document.createElement('div')
+  modal.id = 'signal-refresh-modal'
+  modal.style.cssText = 'position:fixed;inset:0;z-index:100;background:rgba(0,0,0,0.6);display:flex;align-items:flex-end;justify-content:center;padding:var(--s4);'
+  modal.innerHTML = `
+    <div style="background:var(--bg-raised);border:1px solid var(--border-soft);border-radius:var(--r3);padding:var(--s5);width:100%;max-width:420px;">
+      <div style="font-size:15px;font-weight:600;color:var(--text-primary);margin-bottom:var(--s2);">Data refreshed ${age} ago</div>
+      <div style="font-size:13px;color:var(--text-secondary);margin-bottom:var(--s5);line-height:1.5;">Fetching again uses your network quota. Refresh anyway?</div>
+      <div style="display:flex;gap:var(--s3);">
+        <button id="signal-modal-cancel" class="btn btn-ghost" style="flex:1;">Cancel</button>
+        <button id="signal-modal-confirm" class="btn" style="flex:1;background:var(--accent);color:#fff;border:none;">Yes, Refresh</button>
+      </div>
+    </div>
+  `
+  document.body.appendChild(modal)
+
+  const opts = signal ? { signal } : {}
+  const dismiss = () => modal.remove()
+
+  modal.addEventListener('click', (e) => { if (e.target === modal) dismiss() }, opts)
+  modal.querySelector('#signal-modal-cancel').addEventListener('click', dismiss, opts)
+  modal.querySelector('#signal-modal-confirm').addEventListener('click', () => {
+    dismiss()
+    _loadSignals(container, signal, { forceRefresh: true })
+  }, opts)
+  signal?.addEventListener('abort', dismiss, { once: true })
+}
+
+function _attachRefreshHandler(container, signal) {
+  const btn = container.querySelector('#signal-refresh-btn')
+  if (!btn) return
+  btn.addEventListener('click', () => {
+    const lastFetch = configGet('congressional_last_fetch', '')
+    const ageMs = lastFetch ? Date.now() - new Date(lastFetch).getTime() : Infinity
+    if (ageMs < 86_400_000) {
+      _showRefreshModal(container, signal, _formatAge(ageMs))
+    } else {
+      _loadSignals(container, signal, { forceRefresh: true })
+    }
+  }, signal ? { signal } : {})
+}
+
 function _render(container, signal) {
   if (signal?.aborted) return
   const filtered = _applyFilter(_liveSignals ?? MOCK_SIGNALS, _partyFilter, _actionFilter)
+
+  const lastFetchStr = configGet('congressional_last_fetch', '')
+  const lastUpdatedLabel = lastFetchStr
+    ? ` · updated ${_formatAge(Date.now() - new Date(lastFetchStr).getTime())} ago`
+    : ''
 
   const mockBanner = _usingMock
     ? `<div data-testid="mock-banner" style="background:#7c4a00;color:#ffcc80;padding:8px 12px;border-radius:6px;font-size:13px;margin-bottom:12px;">
@@ -328,9 +386,12 @@ function _render(container, signal) {
         </div>
       </div>
 
-      <!-- Signal count -->
-      <div style="font-size:12px; color:var(--text-tertiary); margin-bottom:var(--s3);">
-        ${filtered.length} stock${filtered.length !== 1 ? 's' : ''} with congressional activity · last ${_activeWindow}d
+      <!-- Signal count + refresh -->
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:var(--s3);">
+        <div style="font-size:12px;color:var(--text-tertiary);">
+          ${filtered.length} stock${filtered.length !== 1 ? 's' : ''} with congressional activity · last ${_activeWindow}d${lastUpdatedLabel}
+        </div>
+        <button id="signal-refresh-btn" class="btn btn-ghost" style="font-size:11px;padding:2px 10px;">↺ Refresh</button>
       </div>
 
       <!-- Signal cards -->
@@ -375,6 +436,8 @@ function _render(container, signal) {
     // Window change triggers a full re-fetch and re-compute
     _loadSignals(container, signal)
   }, opts)
+
+  _attachRefreshHandler(container, signal)
 }
 
 // ─── Filter logic ─────────────────────────────────────────────────────────────
