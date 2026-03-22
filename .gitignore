@@ -31,3 +31,4 @@ congressional_trading_coordination_analysis.json
 test-results/
 playwright-report/
 tests/report/
+.claude/
