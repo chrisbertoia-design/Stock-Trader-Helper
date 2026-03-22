@@ -133,6 +133,7 @@ function _wireUpload(container, signal) {
       _setBtnState('Upload CSV', false)
       showToast('File read timed out — please try again', 'error')
     }, 15000)
+    signal?.addEventListener('abort', () => clearTimeout(_readTimeout), { once: true })
 
     reader.onload = async (ev) => {
       if (signal?.aborted || !container.isConnected) return

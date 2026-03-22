@@ -167,7 +167,7 @@ export async function renderHome(container, signal) {
           <div class="home-card-sub">${stat} · stocks by member activity</div>
           ` : `
           <div class="home-card-value" style="font-size:15px;color:var(--text-secondary);">—</div>
-          <div class="home-card-sub" style="color:var(--text-tertiary);">No signals in last 14 days</div>
+          <div class="home-card-sub" style="color:var(--text-tertiary);">No signals in last 30 days</div>
           `}
         </button>
 

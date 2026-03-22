@@ -101,7 +101,9 @@ export async function renderSettings(container, signal) {
   // ── Per-field save on blur (inputs) and change (selects) ──────────────────
   async function _saveField(key, value) {
     if (value === currentValues[key]) return  // no change
-    debug(CAT, `Saving config key: ${key} = ${value}`)
+    const isSensitive = ['api_key', 'password', 'secret', 'token'].some(s => key.toLowerCase().includes(s))
+    const displayValue = isSensitive ? '***' : value
+    debug(CAT, `Saving config key: ${key} = ${displayValue}`)
     currentValues[key] = value
     try {
       await writeConfigKey(key, value)

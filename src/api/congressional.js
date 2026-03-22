@@ -14,6 +14,10 @@
 
 import { debug, info, warn, error } from '../services/logger.js'
 
+function _esc(str) {
+  return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+}
+
 const CAT              = 'CONGRESSIONAL_API'
 const CACHE_KEY        = 'congressional_cache'
 const CACHE_TTL        = 60 * 60 * 1000   // 1 hour
@@ -227,9 +231,9 @@ function _normalizeRecord(raw) {
 
     return {
       id:               String(raw.id || `${ticker}_${transaction_date}_${(raw.politician_name || '').split(' ').pop()}`),
-      politician_name:  (raw.politician_name || 'Unknown').trim(),
+      politician_name:  _esc((raw.politician_name || 'Unknown').trim()),
       party,
-      ticker,
+      ticker:           _esc(ticker),
       action,
       amount_low,
       amount_high,

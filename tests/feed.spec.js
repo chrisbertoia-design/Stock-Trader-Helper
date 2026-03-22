@@ -8,9 +8,29 @@ import { checkFeedDataSource } from './helpers/dataCheck.js'
 
 test.beforeEach(async ({ page }) => {
   await setupAuth(page)
+  // Intercept congressional-trades.json with exactly 5 controlled trades so
+  // ignore-count tests are deterministic regardless of real seed file size.
+  await page.route('**/congressional-trades.json', route =>
+    route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({
+        generated_at: new Date().toISOString(),
+        trades: [
+          { id: '1', politician_name: 'Nancy Pelosi',     party: 'D', ticker: 'NVDA', action: 'buy',  amount_low: 250001, amount_high: 500000,  transaction_date: '2026-03-11', disclosed_date: '2026-03-13' },
+          { id: '2', politician_name: 'Tommy Tuberville', party: 'R', ticker: 'MSFT', action: 'buy',  amount_low: 15001,  amount_high: 50000,   transaction_date: '2026-03-10', disclosed_date: '2026-03-12' },
+          { id: '3', politician_name: 'Ro Khanna',        party: 'D', ticker: 'AAPL', action: 'sell', amount_low: 50001,  amount_high: 100000,  transaction_date: '2026-03-08', disclosed_date: '2026-03-11' },
+          { id: '4', politician_name: 'Josh Gottheimer',  party: 'D', ticker: 'AMD',  action: 'buy',  amount_low: 100001, amount_high: 250000,  transaction_date: '2026-03-07', disclosed_date: '2026-03-10' },
+          { id: '5', politician_name: 'Michael McCaul',   party: 'R', ticker: 'TSM',  action: 'buy',  amount_low: 500001, amount_high: 1000000, transaction_date: '2026-03-05', disclosed_date: '2026-03-09' },
+        ],
+      }),
+    })
+  )
   await goHome(page)
-  // Clear any prior decisions so each test starts fresh
-  await page.evaluate(() => localStorage.removeItem('sth_trade_decisions'))
+  // Clear any prior decisions and cache so each test starts fresh
+  await page.evaluate(() => {
+    localStorage.removeItem('sth_trade_decisions')
+    localStorage.removeItem('congressional_cache')
+  })
   await page.locator('.home-card').first().click()
   await page.locator('#feed-cards').waitFor({ timeout: 5000 })
 })

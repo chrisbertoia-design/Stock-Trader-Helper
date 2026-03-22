@@ -9,36 +9,34 @@ import { checkTopSignalDataSource } from './helpers/dataCheck.js'
 // Shared mock payload used by route.fulfill() tests.
 // Fulfilling with real-shaped data lets the view compute live signals
 // and proves the mock-data fallback path is NOT triggered.
+//
+// Field names MUST match what _normalizeRecord() reads from raw records:
+//   politician_name, action ('buy'|'sell'), amount_low, amount_high, party, ticker, transaction_date
+// (NOT the HSW raw-shape fields like representative/type/amount)
+//
+// To generate ≥1 real signal: need pct_of_party >= tier1 (8% default).
+// PARTY_ROSTER.D = 213 → need ≥ ceil(213 * 0.08) = 18 distinct D traders buying NVDA.
+// We supply 18 unique politician names all buying NVDA in the last 30 days.
+const _DEMO_NAMES = [
+  'Rep A', 'Rep B', 'Rep C', 'Rep D', 'Rep E', 'Rep F',
+  'Rep G', 'Rep H', 'Rep I', 'Rep J', 'Rep K', 'Rep L',
+  'Rep M', 'Rep N', 'Rep O', 'Rep P', 'Rep Q', 'Rep R',
+]
+const _RECENT_DATE = new Date(Date.now() - 20 * 86400000).toISOString().slice(0, 10)
 const MOCK_TRADES_PAYLOAD = {
-  generated_at: '2026-03-11T00:00:00.000Z',
-  trades: [
-    {
-      disclosure_year: 2026,
-      transaction_date: '2026-03-11',
-      owner: 'self',
-      ticker: 'NVDA',
-      asset_description: 'NVIDIA Corp',
-      type: 'purchase',
-      amount: '$250,001 - $500,000',
-      representative: 'Nancy Pelosi',
-      district: 'CA-11',
-      cap_gains_over_200_usd: false,
-      party: 'D',
-    },
-    {
-      disclosure_year: 2026,
-      transaction_date: '2026-03-10',
-      owner: 'self',
-      ticker: 'MSFT',
-      asset_description: 'Microsoft Corp',
-      type: 'purchase',
-      amount: '$15,001 - $50,000',
-      representative: 'Josh Gottheimer',
-      district: 'NJ-05',
-      cap_gains_over_200_usd: false,
-      party: 'D',
-    },
-  ],
+  generated_at: new Date().toISOString(),
+  trades: _DEMO_NAMES.map((name, i) => ({
+    id:               `mock-signal-${i}`,
+    politician_name:  name,
+    party:            'D',
+    ticker:           'NVDA',
+    action:           'buy',
+    amount_low:       15001,
+    amount_high:      50000,
+    transaction_date: _RECENT_DATE,
+    disclosed_date:   _RECENT_DATE,
+    sp500:            'Y',
+  })),
 }
 
 test.beforeEach(async ({ page }) => {
