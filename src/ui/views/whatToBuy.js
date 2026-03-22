@@ -4,6 +4,12 @@
  * Step 2: Ranked slice picks with rationale + summary table
  */
 
+import { fetchAllTransactions, computeConsensusSignals } from '../../api/congressional.js'
+import { getPositions }                                   from '../../stores/positions.js'
+import { getConfig }                                      from '../../stores/config.js'
+
+const PARTY_ROSTER = { D: 213, R: 222 }
+
 const MOCK_PICKS = [
   { ticker: 'NVDA', pct: 0.22, rationale: 'Pelosi + 14% of Congress buying. AI chip tailwind.', followed: true,  owned: 2800,  alignment: 'aligned'  },
   { ticker: 'MSFT', pct: 0.18, rationale: 'Crenshaw bought recently. Strong enterprise AI demand.', followed: false, owned: 0,     alignment: 'gap'      },
@@ -72,17 +78,17 @@ export function renderWhatToBuy(container, signal) {
   }, signal ? { signal } : {})
   container.querySelector('#pick-increment').addEventListener('click', () => {
     const inp = container.querySelector('#pick-count-display')
-    const val = Math.min(MOCK_PICKS.length, parseInt(inp.textContent, 10) + 1)
+    const val = Math.min(MAX_PICK_COUNT, parseInt(inp.textContent, 10) + 1)
     inp.textContent = val
     _updatePicksBtn(container)
   }, signal ? { signal } : {})
 
   // Submit
-  container.querySelector('#get-picks-btn').addEventListener('click', () => _submit(container, signal), signal ? { signal } : {})
+  container.querySelector('#get-picks-btn').addEventListener('click', () => _submit(container, signal).catch(console.error), signal ? { signal } : {})
 
   // Enter key
   container.querySelector('#amount-input').addEventListener('keypress', (e) => {
-    if (e.key === 'Enter') _submit(container, signal)
+    if (e.key === 'Enter') _submit(container, signal).catch(console.error)
   }, signal ? { signal } : {})
 }
 
@@ -104,11 +110,11 @@ function _updatePicksBtn(container) {
   }
 }
 
-function _submit(container, signal) {
+async function _submit(container, signal) {
   const input      = container.querySelector('#amount-input')
   const pickDisplay = container.querySelector('#pick-count-display')
   const amount      = parseInt(input.value, 10)
-  const pickCount   = Math.min(Math.max(parseInt(pickDisplay?.textContent, 10) || DEFAULT_PICK_COUNT, 1), MOCK_PICKS.length)
+  const pickCount   = Math.min(Math.max(parseInt(pickDisplay?.textContent, 10) || DEFAULT_PICK_COUNT, 1), MAX_PICK_COUNT)
 
   const existingError = container.querySelector('#amount-error')
   if (existingError) existingError.remove()
@@ -122,12 +128,123 @@ function _submit(container, signal) {
     return
   }
 
-  container.innerHTML = _renderStep2(amount, pickCount)
+  // Show loading skeleton while fetching live signals
+  container.innerHTML = _renderStep2Loading(amount)
+
+  let picks = []
+  let usingMock = false
+
+  try {
+    const [allTx, positions] = await Promise.all([
+      fetchAllTransactions(),
+      Promise.resolve(getPositions()),
+    ])
+
+    if (signal?.aborted) return
+
+    const rawSignals = computeConsensusSignals(allTx, { config: getConfig(), partyRoster: PARTY_ROSTER })
+    picks = _derivePicksFromSignals(rawSignals, positions || {}, pickCount)
+
+    if (!picks.length) {
+      usingMock = true
+      picks = MOCK_PICKS.slice(0, pickCount)
+    }
+  } catch (_err) {
+    usingMock = true
+    picks = MOCK_PICKS.slice(0, pickCount)
+  }
+
+  if (signal?.aborted) return
+
+  container.innerHTML = _renderStep2(amount, picks, usingMock)
 
   container.querySelector('#change-amount-link').addEventListener('click', (e) => {
     e.preventDefault()
     renderWhatToBuy(container, signal)
   }, signal ? { signal } : {})
+}
+
+// ─── Loading skeleton for Step 2 ─────────────────────────────────────────────
+
+function _renderStep2Loading(totalAmount) {
+  return `
+    <div style="max-width:480px; margin:0 auto;">
+      <div class="card" style="padding:var(--s5);">
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:var(--s5);">
+          <span style="color:var(--text-tertiary); font-size:13px;">← Change amount</span>
+          <span style="font-size:18px; font-weight:600; color:var(--text-primary); font-family:var(--font-mono);">$${totalAmount.toLocaleString()}</span>
+        </div>
+        <div style="color:var(--text-tertiary); font-size:13px; text-align:center; padding:var(--s6) 0;">
+          Loading congressional signals…
+        </div>
+      </div>
+    </div>
+  `
+}
+
+// ─── Derive live picks from consensus signals ─────────────────────────────────
+
+/**
+ * Groups rawSignals (one entry per party::ticker) by ticker, merges D+R rows,
+ * sorts by memberCount DESC then tier DESC, takes top pickCount, and normalises
+ * each pick into the shape expected by _renderPickCard.
+ *
+ * @param {Array}  rawSignals  Output of computeConsensusSignals()
+ * @param {Object} positions   Map of ticker → position from getPositions()
+ * @param {number} pickCount   How many picks to return
+ * @returns {Array} picks in _renderPickCard shape
+ */
+function _derivePicksFromSignals(rawSignals, positions, pickCount) {
+  // 1. Group by ticker, merge D + R rows
+  const byTicker = new Map()
+  for (const sig of rawSignals) {
+    const t = sig.tickers  // field is 'tickers' not 'ticker'
+    if (!byTicker.has(t)) {
+      byTicker.set(t, { ticker: t, partyD: 0, partyR: 0, memberCount: 0, tier: sig.tier })
+    }
+    const entry = byTicker.get(t)
+    if (sig.party === 'D') entry.partyD = sig.member_count
+    else if (sig.party === 'R') entry.partyR = sig.member_count
+    entry.memberCount = entry.partyD + entry.partyR
+    if (sig.tier > entry.tier) entry.tier = sig.tier
+  }
+
+  // 2. Sort by memberCount DESC, tier DESC
+  const sorted = Array.from(byTicker.values())
+    .sort((a, b) => b.memberCount - a.memberCount || b.tier - a.tier)
+
+  // 3. Take top pickCount
+  const top = sorted.slice(0, pickCount)
+  if (!top.length) return []
+
+  // 4. Compute tier-weighted allocation percentages
+  const tierWeight = { 3: 3, 2: 2, 1: 1 }
+  const totalWeight = top.reduce((sum, e) => sum + (tierWeight[e.tier] || 1), 0)
+
+  // 5. Build final pick objects
+  return top.map((entry, idx) => {
+    const weight    = tierWeight[entry.tier] || 1
+    const pct       = Math.round((weight / totalWeight) * 100) / 100  // 0.0–1.0
+
+    const pos       = positions[entry.ticker]
+    const owned     = pos ? (pos.quantity > 0.001) : false
+    const alignment = owned ? 'aligned' : 'gap'
+
+    return {
+      ticker:      entry.ticker,
+      name:        '',         // not available in congressional data — Phase 4 fills
+      pct,
+      alignment,
+      rationale:   '',         // Phase 4 (AI layer) fills this
+      followed:    false,
+      owned:       pos ? (pos.mkt_value || 0) : 0,
+      tier:        entry.tier,
+      memberCount: entry.memberCount,
+      partyD:      entry.partyD,
+      partyR:      entry.partyR,
+      rank:        idx + 1,
+    }
+  })
 }
 
 function _renderStep1() {
@@ -190,7 +307,7 @@ function _renderStep1() {
                 color:var(--text-secondary);
                 font-size:20px; cursor:pointer;
               ">+</button>
-              <span style="font-size:12px; color:var(--text-tertiary); margin-left:var(--s2);">${MOCK_PICKS.length} available</span>
+              <span style="font-size:12px; color:var(--text-tertiary); margin-left:var(--s2);">up to ${MAX_PICK_COUNT} picks</span>
             </div>
           </div>
 
@@ -237,16 +354,14 @@ function _renderStep1() {
   `
 }
 
-function _renderStep2(totalAmount, pickCount) {
-  // Slice to requested count (capped by available mock data)
-  const available = MOCK_PICKS.slice(0, pickCount)
-  if (!available.length) {
+function _renderStep2(totalAmount, picks, usingMock = false) {
+  if (!picks.length) {
     return `<div style="padding:var(--s6);text-align:center;color:var(--text-tertiary);">No picks available.</div>`
   }
-  const perPick   = Math.round(totalAmount / available.length / 25) * 25
-  const picks = available.map((pick, idx) => ({
+  const perPick = Math.round(totalAmount / picks.length / 25) * 25
+  picks = picks.map((pick, idx) => ({
     ...pick,
-    rank: idx + 1,
+    rank:        idx + 1,
     allocAmount: perPick,
   }))
 
@@ -272,11 +387,24 @@ function _renderStep2(totalAmount, pickCount) {
           </span>
         </div>
 
+        ${usingMock ? `
+          <div style="
+            background:rgba(196,140,50,0.15);
+            border:1px solid rgba(196,140,50,0.35);
+            border-radius:var(--r2);
+            padding:var(--s3) var(--s4);
+            margin-bottom:var(--s4);
+            font-size:12px;
+            color:#c48c32;
+          ">
+            Using sample data — no live signals available yet
+          </div>
+        ` : ''}
+
         <div style="margin-bottom:var(--s5);">
           <h2 style="font-size:15px; font-weight:500; margin-bottom:var(--s1); color:var(--text-primary);">Recommended Slices</h2>
           <div style="font-size:12px; color:var(--text-tertiary); margin-bottom:var(--s2);">
             ${picks.length} pick${picks.length !== 1 ? 's' : ''} · based on recent signals
-            ${pickCount > MOCK_PICKS.length ? ` <span style="color:var(--accent);">(${MOCK_PICKS.length} available today)</span>` : ''}
           </div>
           <div style="font-size:11px; color:var(--text-secondary); margin-bottom:var(--s4);">
             Portfolio match: ${_alignmentSummary(picks)}

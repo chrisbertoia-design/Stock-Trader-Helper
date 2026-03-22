@@ -22,6 +22,7 @@ const CAT              = 'CONGRESSIONAL_API'
 const CACHE_KEY        = 'congressional_cache'
 const CACHE_TTL        = 60 * 60 * 1000   // 1 hour
 const FETCH_TIMEOUT    = 10_000            // 10s — static file fetch
+const WORKER_TIMEOUT   = 30_000            // 30s — parser worker (large payload)
 const DATA_WINDOW_DAYS = 90               // trim to last 90 days
 
 const TRADES_URL = import.meta.env.BASE_URL + 'congressional-trades.json'
@@ -139,26 +140,51 @@ async function _fetchFromNetwork() {
       throw new Error(`congressional-trades.json HTTP ${res.status}`)
     }
 
-    const json = await res.json()
-    const rawTrades = json.trades
+    // Read as text so we can hand the raw string to the Web Worker
+    // (avoids double-parse: browser JSON.parse + our normalization on the main thread)
+    const text = await res.text()
 
-    if (!Array.isArray(rawTrades)) {
-      throw new Error('congressional-trades.json: "trades" field is not an array')
-    }
+    // Quick header peek without full parse — log generated_at before worker starts
+    let generatedAt = 'unknown'
+    try {
+      const peek = JSON.parse(text)
+      generatedAt = peek.generated_at || 'unknown'
+      info(CAT, 'Raw API response received', {
+        generated_at:   generatedAt,
+        trade_count:    peek.trades?.length ?? 0,
+        sample_tickers: peek.trades?.slice(0, 3).map(t => t.ticker)
+      })
+    } catch (_) { /* ignore peek errors — worker will surface them */ }
 
-    info(CAT, 'Raw API response received', {
-      generated_at:   json.generated_at,
-      trade_count:    json.trades?.length ?? 0,
-      sample_tickers: json.trades?.slice(0, 3).map(t => t.ticker)
+    // Parse + normalize in Web Worker to avoid blocking the main thread (BL-006)
+    info(CAT, 'Offloading JSON normalization to Web Worker...')
+    const workerResult = await new Promise((resolve, reject) => {
+      const worker = new Worker(
+        new URL('../workers/congressional-parser.worker.js', import.meta.url),
+        { type: 'module' }
+      )
+      const timeout = setTimeout(() => {
+        worker.terminate()
+        reject(new Error('Worker parse timeout'))
+      }, WORKER_TIMEOUT)
+      worker.onmessage = (e) => {
+        clearTimeout(timeout)
+        worker.terminate()
+        if (e.data.error) reject(new Error(e.data.error))
+        else resolve(e.data.trades)
+      }
+      worker.onerror = (e) => {
+        clearTimeout(timeout)
+        worker.terminate()
+        reject(new Error(e.message || 'Worker error'))
+      }
+      worker.postMessage(text)
     })
 
-    info(CAT, `Static file returned ${rawTrades.length} raw trade records — normalizing...`)
+    info(CAT, `Worker returned ${workerResult.length} normalized records — trimming to ${DATA_WINDOW_DAYS} days`)
 
     const cutoffMs = Date.now() - DATA_WINDOW_DAYS * 86_400_000
-    const normalized = rawTrades
-      .map(_normalizeRecord)
-      .filter(Boolean)
-      .filter(t => t.transaction_ts >= cutoffMs)
+    const normalized = workerResult.filter(t => t.transaction_ts >= cutoffMs)
 
     info(CAT, `Congressional trades ready — ${normalized.length} records cached`)
     _writeCache(normalized)

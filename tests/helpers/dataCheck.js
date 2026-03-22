@@ -90,12 +90,13 @@ export async function checkTopSignalDataSource(page, testInfo) {
 }
 
 /**
- * What to Buy view — always mock in Phase 3 (live recommendations wiring is BL-021).
+ * What to Buy view — BL-021 shipped: picks now come from live computeConsensusSignals().
+ * Falls back to MOCK_PICKS with orange banner when no signals cross the tier1 threshold.
  */
 export async function checkWhatToBuyDataSource(page, testInfo) {
   return _check(page, testInfo, {
     view:   'What to Buy',
-    reason: 'BL-021 (wire What to Buy to live recommendations tab) not yet shipped. All picks are MOCK_PICKS from whatToBuy.js.',
-    phase:  'BL-021 pending'
+    reason: 'BL-021 shipped. Picks from live computeConsensusSignals() with MOCK_PICKS fallback.',
+    phase:  'BL-021 shipped'
   })
 }

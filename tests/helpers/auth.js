@@ -13,13 +13,14 @@ export const FAKE_AUTH = {
 }
 
 /**
- * Call before page.goto(). Injects fake auth into localStorage and mocks
+ * Call before page.goto(). Injects fake auth into sessionStorage and mocks
  * all Google API network calls so no real network is needed.
+ * sth_auth moved from localStorage → sessionStorage (security hardening).
  */
 export async function setupAuth(page) {
   // 1. Inject fake token before page script runs
   await page.addInitScript((auth) => {
-    localStorage.setItem('sth_auth', JSON.stringify(auth))
+    sessionStorage.setItem('sth_auth', JSON.stringify(auth))
   }, { ...FAKE_AUTH, tokenTs: Date.now() })
 
   // 2. Block ALL external API calls immediately.

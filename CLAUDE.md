@@ -358,14 +358,15 @@ Structured logger in `src/services/logger.js`. Levels: DEBUG, INFO, WARN, ERROR.
 | BL-028 | 29-pick mock pool in What to Buy (expanded from 10) | P2 | ✅ Shipped |
 | BL-019 | Wire Feed view to real HSW congressional trades API | P0 | ✅ Shipped |
 | BL-020 | Wire Top Signal + home card to live congressional consensus signals | P0 | ✅ Shipped |
-| BL-021 | Wire What to Buy picks to live `recommendations` tab (replace mock) | P0 | 🔲 Next |
+| BL-021 | Wire What to Buy picks to live consensus signals (replace mock) | P0 | ✅ Shipped |
+| BL-006 | Congressional JSON parsing in Web Worker (non-blocking) | P1 | ✅ Shipped |
+| BL-018 | PWA installable on mobile (manifest + icons) | Backlog | ✅ Shipped |
 | BL-022 | AI: Gemini wiring for follow/ignore modal recommendations | P1 | 🔲 Next |
 | BL-023 | AI: What to Buy ranked picks with Gemini rationale | P1 | 🔲 Next |
 
 ### Pending
 | ID | Title | Priority | Notes |
 |----|-------|----------|-------|
-| BL-006 | HSW JSON parse: move to Web Worker to unblock main thread on 30-50MB payload | P1 | Biggest perf win |
 | BL-007 | `readTab` unbounded A:ZZ range → use schema column bounds | P2 | Reduces Sheets read latency |
 | BL-008 | Skeleton/loading states for all views | P2 | Positions already has skeleton |
 | BL-009 | localStorage cache for HSW → IndexedDB (quota + sync JSON.parse) | P2 | Prevents silent cache failures |

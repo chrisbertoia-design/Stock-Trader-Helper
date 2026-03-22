@@ -18,6 +18,7 @@
 import { callOllama }  from './ollama.js'
 import { callGemini }  from './gemini.js'
 import { debug, info, warn, error } from '../../services/logger.js'
+import { getConfig }   from '../../stores/config.js'
 
 const CAT = 'AI_ROUTER'
 
@@ -28,9 +29,11 @@ const CAT = 'AI_ROUTER'
  */
 export async function ask(prompt, { system = '', config, context = {} } = {}) {
   // Merge env vars as lowest-priority fallback (useful before Sheets is connected)
+  // gemini_api_key is read from Sheets config at runtime; env var is local-dev fallback only
+  const runtimeConfig = getConfig()
   const envConfig = {
     ai_provider:           import.meta.env.VITE_AI_PROVIDER || '',
-    gemini_api_key:        import.meta.env.VITE_GEMINI_API_KEY || '',
+    gemini_api_key:        runtimeConfig.gemini_api_key || import.meta.env.VITE_GEMINI_API_KEY || '',
     gemini_fallback_model: import.meta.env.VITE_GEMINI_MODEL || '',
   }
   const merged   = { ...envConfig, ...(config || {}) }

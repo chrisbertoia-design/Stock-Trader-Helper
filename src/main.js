@@ -79,7 +79,7 @@ async function _connectSheets(spreadsheetId, accessToken) {
     // Hard auth errors → re-prompt silently (no loading screen)
     if (err.message?.includes('401') || err.message?.includes('403')) {
       info('BOOT', 'Auth error — clearing stored credentials')
-      localStorage.removeItem('sth_auth')
+      sessionStorage.removeItem('sth_auth')
     }
   }
 }

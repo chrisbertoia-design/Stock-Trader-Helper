@@ -61,7 +61,7 @@ export function loadAuth() { return _loadAuth() }
 
 /** Sign out — clear stored auth */
 export function signOut() {
-  localStorage.removeItem(LS_KEY)
+  sessionStorage.removeItem(LS_KEY)
   info(CAT, 'Signed out')
 }
 
@@ -297,12 +297,12 @@ function _getClientId() {
 }
 
 function _saveAuth(obj) {
-  localStorage.setItem(LS_KEY, JSON.stringify(obj))
+  sessionStorage.setItem(LS_KEY, JSON.stringify(obj))
 }
 
 function _loadAuth() {
   try {
-    const raw = localStorage.getItem(LS_KEY)
+    const raw = sessionStorage.getItem(LS_KEY)
     return raw ? JSON.parse(raw) : null
   } catch { return null }
 }
