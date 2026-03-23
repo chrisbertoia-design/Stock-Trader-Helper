@@ -108,7 +108,9 @@ export async function renderDecisionsHistory(container, signal) {
     return
   }
 
-  const cardsHtml = followedTrades.length === 0
+  const cardsHtml = followedIds.length === 0
+    ? `<div style="padding:var(--s4);text-align:center;color:var(--text-tertiary);font-size:13px;">No followed trades yet. Follow trades in the Feed to see them here.</div>`
+    : followedTrades.length === 0
     ? `<div style="padding:var(--s4);text-align:center;color:var(--text-tertiary);font-size:13px;">Followed trades are outside the 6-month data window.</div>`
     : followedTrades.map(t => {
         if (t._stub) {

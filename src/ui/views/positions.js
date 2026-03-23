@@ -148,10 +148,11 @@ function _wireUpload(container, signal) {
         // Detect format by header: transactions CSV starts with Date,Action,Symbol
         const isTransactions = /date[",\s]+action[",\s]+symbol/i.test(csvText.slice(0, 500))
 
+        let rawTxCount = 0
         if (isTransactions) {
           debug(CAT, 'Detected transactions CSV format')
           const transactions = parseTransactionsCsv(csvText)
-          const rawTxCount = transactions.length
+          rawTxCount = transactions.length
           // Yield again after heavy parse
           await new Promise(r => setTimeout(r, 0))
           parsed = derivePositions(transactions)

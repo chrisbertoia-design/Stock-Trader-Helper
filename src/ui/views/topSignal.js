@@ -7,6 +7,10 @@
 import { fetchAllTransactions, computeConsensusSignals } from '../../api/congressional.js'
 import { getConfig, get as configGet, getPartyRoster } from '../../stores/config.js'
 
+// Tracks when the user last manually clicked ↺ Refresh in this session.
+// Null on fresh page load — gate never fires until at least one manual refresh.
+let _manualRefreshTs = null
+
 const MOCK_SIGNALS = [
   {
     ticker:      'NVDA',
@@ -322,6 +326,7 @@ function _showRefreshModal(container, signal, age) {
   modal.querySelector('#signal-modal-cancel').addEventListener('click', dismiss, opts)
   modal.querySelector('#signal-modal-confirm').addEventListener('click', () => {
     dismiss()
+    _manualRefreshTs = Date.now()
     _loadSignals(container, signal, { forceRefresh: true })
   }, opts)
   signal?.addEventListener('abort', dismiss, { once: true })
@@ -331,11 +336,11 @@ function _attachRefreshHandler(container, signal) {
   const btn = container.querySelector('#signal-refresh-btn')
   if (!btn) return
   btn.addEventListener('click', () => {
-    const lastFetch = configGet('congressional_last_fetch', '')
-    const ageMs = lastFetch ? Date.now() - new Date(lastFetch).getTime() : Infinity
+    const ageMs = _manualRefreshTs ? Date.now() - _manualRefreshTs : Infinity
     if (ageMs < 86_400_000) {
       _showRefreshModal(container, signal, _formatAge(ageMs))
     } else {
+      _manualRefreshTs = Date.now()
       _loadSignals(container, signal, { forceRefresh: true })
     }
   }, signal ? { signal } : {})

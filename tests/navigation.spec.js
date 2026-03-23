@@ -10,9 +10,9 @@ test.beforeEach(async ({ page }) => {
   await goHome(page)
 })
 
-test('home renders 4 tiles', async ({ page }) => {
+test('home renders 5 tiles', async ({ page }) => {
   const tiles = page.locator('.home-card')
-  await expect(tiles).toHaveCount(4)
+  await expect(tiles).toHaveCount(5)
 })
 
 test('back button is hidden on home', async ({ page }) => {
@@ -51,6 +51,13 @@ test('home → whatToBuy (Buy tile)', async ({ page }) => {
   await expect(page.locator('#back-btn')).not.toHaveClass(/hidden/)
 })
 
+test('home → decisionsHistory (My Decisions tile)', async ({ page }) => {
+  const tiles = page.locator('.home-card')
+  await tiles.nth(4).click()
+  await expect(page.getByText('My Decisions', { exact: true }).first()).toBeVisible({ timeout: 6000 })
+  await expect(page.locator('#back-btn')).not.toHaveClass(/hidden/)
+})
+
 test('home → settings (gear button)', async ({ page }) => {
   await page.locator('#settings-btn').click()
   await expect(page.locator('#save-settings')).toBeVisible({ timeout: 5000 })
@@ -62,35 +69,42 @@ test('back from feed → home', async ({ page }) => {
   await page.locator('.home-card').first().click()
   await page.locator('#feed-cards').waitFor()
   await page.locator('#back-btn').click()
-  await expect(page.locator('.home-card')).toHaveCount(4, { timeout: 5000 })
+  await expect(page.locator('.home-card')).toHaveCount(5, { timeout: 5000 })
 })
 
 test('back from topSignal → home', async ({ page }) => {
   await page.locator('.home-card').nth(1).click()
   await page.locator('#party-filters').waitFor()
   await page.locator('#back-btn').click()
-  await expect(page.locator('.home-card')).toHaveCount(4, { timeout: 5000 })
+  await expect(page.locator('.home-card')).toHaveCount(5, { timeout: 5000 })
 })
 
 test('back from positions → home', async ({ page }) => {
   await page.locator('.home-card').nth(2).click()
   await page.locator('h2').waitFor()
   await page.locator('#back-btn').click()
-  await expect(page.locator('.home-card')).toHaveCount(4, { timeout: 5000 })
+  await expect(page.locator('.home-card')).toHaveCount(5, { timeout: 5000 })
 })
 
 test('back from whatToBuy → home', async ({ page }) => {
   await page.locator('.home-card').nth(3).click()
   await page.locator('#amount-input').waitFor()
   await page.locator('#back-btn').click()
-  await expect(page.locator('.home-card')).toHaveCount(4, { timeout: 5000 })
+  await expect(page.locator('.home-card')).toHaveCount(5, { timeout: 5000 })
 })
 
 test('back from settings → home', async ({ page }) => {
   await page.locator('#settings-btn').click()
   await page.locator('#save-settings').waitFor()
   await page.locator('#back-btn').click()
-  await expect(page.locator('.home-card')).toHaveCount(4, { timeout: 5000 })
+  await expect(page.locator('.home-card')).toHaveCount(5, { timeout: 5000 })
+})
+
+test('back from decisionsHistory → home', async ({ page }) => {
+  await page.locator('.home-card').nth(4).click()
+  await page.getByText('My Decisions', { exact: true }).first().waitFor({ timeout: 6000 })
+  await page.locator('#back-btn').click()
+  await expect(page.locator('.home-card')).toHaveCount(5, { timeout: 5000 })
 })
 
 test('rapid back-and-forth navigation does not crash (5 cycles)', async ({ page }) => {
@@ -101,7 +115,7 @@ test('rapid back-and-forth navigation does not crash (5 cycles)', async ({ page 
     await page.locator('.home-card').first().waitFor({ timeout: 5000 })
   }
   // Still on home after all cycles
-  await expect(page.locator('.home-card')).toHaveCount(4)
+  await expect(page.locator('.home-card')).toHaveCount(5)
 })
 
 test('navigate to same view twice does nothing (guard works)', async ({ page }) => {
@@ -124,4 +138,46 @@ test('[OPTION-A] reload restores last view via sessionStorage', async ({ page })
   await page.reload({ waitUntil: 'domcontentloaded' })
   await expect(page.locator('#party-filters')).toBeVisible({ timeout: 5000 })
   await expect(page.locator('.home-card')).toHaveCount(0)
+})
+
+// ─── URL hash routing ─────────────────────────────────────────────────────────
+
+test('[HASH] navigating to feed updates URL to #/feed', async ({ page }) => {
+  await page.locator('.home-card').first().click()
+  await page.locator('#feed-cards').waitFor({ timeout: 6000 })
+  expect(page.url()).toContain('#/feed')
+})
+
+test('[HASH] navigating back from feed updates URL to #/', async ({ page }) => {
+  await page.locator('.home-card').first().click()
+  await page.locator('#feed-cards').waitFor({ timeout: 6000 })
+  await page.locator('#back-btn').click()
+  await page.locator('.home-card').first().waitFor({ timeout: 5000 })
+  expect(page.url()).toMatch(/#\/?$/)
+})
+
+test('[HASH] deep link #/feed navigates directly to feed', async ({ page }) => {
+  await setupAuth(page)
+  await page.goto('/#/feed', { waitUntil: 'domcontentloaded' })
+  await expect(page.locator('#feed-cards')).toBeVisible({ timeout: 8000 })
+})
+
+test('[HASH] deep link #/positions navigates directly to positions', async ({ page }) => {
+  await setupAuth(page)
+  await page.goto('/#/positions', { waitUntil: 'domcontentloaded' })
+  await expect(page.locator('h2', { hasText: 'My Positions' })).toBeVisible({ timeout: 8000 })
+})
+
+test('[HASH] deep link #/decisionsHistory navigates directly to decisionsHistory', async ({ page }) => {
+  await setupAuth(page)
+  await page.goto('/#/decisionsHistory', { waitUntil: 'domcontentloaded' })
+  await expect(page.getByText('My Decisions', { exact: true }).first()).toBeVisible({ timeout: 8000 })
+})
+
+test('[HASH] invalid hash defaults to home', async ({ page }) => {
+  await setupAuth(page)
+  await page.goto('/#/nonexistentview', { waitUntil: 'domcontentloaded' })
+  // Should fall back to home or last view — either way, feed-cards must not appear
+  await page.waitForTimeout(500)
+  await expect(page.locator('#feed-cards')).not.toBeVisible()
 })

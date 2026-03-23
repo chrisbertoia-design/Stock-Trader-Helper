@@ -146,10 +146,10 @@ test('[REGRESSION] ignore then immediate back does not crash', async ({ page }) 
   // Navigate away BEFORE the 320ms card.remove fires
   await page.locator('#back-btn').click()
   // Must land on home cleanly
-  await expect(page.locator('.home-card')).toHaveCount(4, { timeout: 3000 })
+  await expect(page.locator('.home-card')).toHaveCount(5, { timeout: 3000 })
   // Wait for the 320ms timer to fire safely (should be a no-op, not crash)
   await page.waitForTimeout(400)
-  await expect(page.locator('.home-card')).toHaveCount(4)
+  await expect(page.locator('.home-card')).toHaveCount(5)
 })
 
 test('[REGRESSION] returning to feed after ignore does not re-add ghost card', async ({ page }) => {

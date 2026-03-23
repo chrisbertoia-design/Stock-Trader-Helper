@@ -13,6 +13,10 @@ import { WATCHLIST } from '../../data/watchlist.js'
 
 const CAT = 'FEED_VIEW'
 
+// Tracks when the user last manually clicked ↺ Refresh in this session.
+// Null on fresh page load — gate never fires until at least one manual refresh.
+let _manualRefreshTs = null
+
 // ─── Pagination state ────────────────────────────────────────────────────────
 // Reset on each fresh renderFeed() call. Shared with the "Show more" handler.
 let _displayCount = 5
@@ -188,7 +192,7 @@ export async function renderFeed(container, signal, { forceRefresh = false } = {
     let watchlistNames = WATCHLIST.filter(w => w.active === 'Y').map(w => w.name)
     try {
       const rows = await readTab('watchlist')
-      const sheetsNames = rows.filter(r => r[3]?.toUpperCase() === 'Y').map(r => r[0]).filter(Boolean)
+      const sheetsNames = rows.filter(r => r[8]?.toUpperCase() === 'Y').map(r => r[1]).filter(Boolean)
       if (sheetsNames.length > 0) {
         watchlistNames = sheetsNames
         debug(CAT, `Watchlist from Sheets: ${watchlistNames.length} active members`)
@@ -432,6 +436,7 @@ function _showRefreshModal(container, signal, age) {
   modal.querySelector('#feed-modal-cancel').addEventListener('click', dismiss, opts)
   modal.querySelector('#feed-modal-confirm').addEventListener('click', () => {
     dismiss()
+    _manualRefreshTs = Date.now()
     const btn = container.querySelector('#feed-refresh-btn')
     if (btn) { btn.textContent = '↺ Refreshing…'; btn.disabled = true }
     renderFeed(container, signal, { forceRefresh: true })
@@ -443,11 +448,11 @@ function _attachRefreshHandler(container, signal) {
   const btn = container.querySelector('#feed-refresh-btn')
   if (!btn) return
   btn.addEventListener('click', () => {
-    const lastFetch = configGet('congressional_last_fetch', '')
-    const ageMs = lastFetch ? Date.now() - new Date(lastFetch).getTime() : Infinity
+    const ageMs = _manualRefreshTs ? Date.now() - _manualRefreshTs : Infinity
     if (ageMs < 86_400_000) {
       _showRefreshModal(container, signal, _formatAge(ageMs))
     } else {
+      _manualRefreshTs = Date.now()
       btn.textContent = '↺ Refreshing…'
       btn.disabled = true
       renderFeed(container, signal, { forceRefresh: true })
