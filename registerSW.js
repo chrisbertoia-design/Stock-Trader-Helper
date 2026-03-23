@@ -1,0 +1,1 @@
+if('serviceWorker' in navigator) {window.addEventListener('load', () => {navigator.serviceWorker.register('/Stock-Trader-Helper/sw.js', { scope: '/Stock-Trader-Helper/' })})}
